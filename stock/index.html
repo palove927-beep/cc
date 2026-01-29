@@ -91,29 +91,88 @@
     <h1>股票即時報價</h1>
     <p class="subtitle">資料來源：台灣證券交易所 (TWSE)</p>
 
-    <div id="stock-container">
-        <p class="loading">載入中...</p>
-    </div>
+    <table class="stock-table">
+        <tr><th>股票</th><th>代號</th><th>現價</th><th>昨收</th><th>漲跌</th><th>漲跌幅</th></tr>
+        <tr>
+            <td>台積電</td><td>2330</td>
+            <td id="price-2330" class="change-cell">-</td>
+            <td id="yclose-2330">-</td>
+            <td id="diff-2330" class="change-cell">-</td>
+            <td id="pct-2330" class="change-cell">-</td>
+        </tr>
+        <tr>
+            <td>聯電</td><td>2303</td>
+            <td id="price-2303" class="change-cell">-</td>
+            <td id="yclose-2303">-</td>
+            <td id="diff-2303" class="change-cell">-</td>
+            <td id="pct-2303" class="change-cell">-</td>
+        </tr>
+        <tr>
+            <td>上銀</td><td>2049</td>
+            <td id="price-2049" class="change-cell">-</td>
+            <td id="yclose-2049">-</td>
+            <td id="diff-2049" class="change-cell">-</td>
+            <td id="pct-2049" class="change-cell">-</td>
+        </tr>
+    </table>
 
+    <div id="status-msg" class="loading" style="display:none;"></div>
     <button class="refresh-btn" onclick="fetchStockData()">重新整理</button>
     <div class="update-time" id="update-time"></div>
 
     <script>
         const STOCKS = [
-            { code: "2330", exchange: "tse", name: "台積電" },
-            { code: "2303", exchange: "tse", name: "聯電" },
-            { code: "2049", exchange: "tse", name: "上銀" }
+            { code: "2330", exchange: "tse" },
+            { code: "2303", exchange: "tse" },
+            { code: "2049", exchange: "tse" }
         ];
 
+        function updateStockRow(code, apiData) {
+            const currentPrice = parseFloat(apiData.z) || parseFloat(apiData.l) || 0;
+            const yesterdayPrice = parseFloat(apiData.y) || 0;
+
+            let colorClass = "price-flat";
+            let sign = "";
+            let diff = 0;
+            let diffPercent = 0;
+
+            if (currentPrice && yesterdayPrice) {
+                diff = currentPrice - yesterdayPrice;
+                diffPercent = (diff / yesterdayPrice) * 100;
+                if (diff > 0) { colorClass = "price-up"; sign = "+"; }
+                else if (diff < 0) { colorClass = "price-down"; }
+            }
+
+            const priceEl = document.getElementById("price-" + code);
+            const ycloseEl = document.getElementById("yclose-" + code);
+            const diffEl = document.getElementById("diff-" + code);
+            const pctEl = document.getElementById("pct-" + code);
+
+            if (currentPrice) {
+                priceEl.textContent = currentPrice.toFixed(2);
+                priceEl.className = "change-cell " + colorClass;
+            }
+            if (yesterdayPrice) {
+                ycloseEl.textContent = yesterdayPrice.toFixed(2);
+            }
+            if (currentPrice && yesterdayPrice) {
+                diffEl.textContent = sign + diff.toFixed(2);
+                diffEl.className = "change-cell " + colorClass;
+                pctEl.textContent = sign + diffPercent.toFixed(2) + "%";
+                pctEl.className = "change-cell " + colorClass;
+            }
+        }
+
         async function fetchStockData() {
-            const container = document.getElementById("stock-container");
-            container.innerHTML = '<p class="loading">載入中...</p>';
+            const statusEl = document.getElementById("status-msg");
+            statusEl.style.display = "block";
+            statusEl.className = "loading";
+            statusEl.textContent = "查詢股價中...";
 
             const exCh = STOCKS.map(s => s.exchange + "_" + s.code + ".tw").join("|");
             const url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
 
             let data = null;
-            // 重試機制：最多 3 次
             for (let attempt = 0; attempt < 3; attempt++) {
                 try {
                     if (attempt > 0) {
@@ -130,42 +189,18 @@
             }
 
             if (!data || !data.msgArray || data.msgArray.length === 0) {
-                container.innerHTML = '<p class="error">無法取得股票資料，請稍後再試。（TWSE API 可能有 CORS 限制，建議透過後端代理存取）</p>';
+                statusEl.className = "error";
+                statusEl.textContent = "無法取得股價資料（TWSE API 可能有 CORS 限制）";
                 return;
             }
 
-            let html = '<table class="stock-table">';
-            html += "<tr><th>股票</th><th>代號</th><th>現價</th><th>昨收</th><th>漲跌</th><th>漲跌幅</th></tr>";
-
             for (const stock of data.msgArray) {
-                const currentPrice = parseFloat(stock.z) || parseFloat(stock.l) || 0;
-                const yesterdayPrice = parseFloat(stock.y) || 0;
-                const diff = currentPrice && yesterdayPrice ? (currentPrice - yesterdayPrice) : 0;
-                const diffPercent = yesterdayPrice ? ((diff / yesterdayPrice) * 100) : 0;
-
-                let colorClass = "price-flat";
-                let sign = "";
-                if (diff > 0) { colorClass = "price-up"; sign = "+"; }
-                else if (diff < 0) { colorClass = "price-down"; }
-
-                const displayPrice = currentPrice ? currentPrice.toFixed(2) : "-";
-                const displayYesterday = yesterdayPrice ? yesterdayPrice.toFixed(2) : "-";
-                const displayDiff = currentPrice && yesterdayPrice ? (sign + diff.toFixed(2)) : "-";
-                const displayPercent = currentPrice && yesterdayPrice ? (sign + diffPercent.toFixed(2) + "%") : "-";
-
-                html += "<tr>";
-                html += "<td>" + (stock.nf || stock.n || "") + "</td>";
-                html += "<td>" + (stock.c || "") + "</td>";
-                html += '<td class="' + colorClass + ' change-cell">' + displayPrice + "</td>";
-                html += "<td>" + displayYesterday + "</td>";
-                html += '<td class="' + colorClass + ' change-cell">' + displayDiff + "</td>";
-                html += '<td class="' + colorClass + ' change-cell">' + displayPercent + "</td>";
-                html += "</tr>";
+                if (stock.c) {
+                    updateStockRow(stock.c, stock);
+                }
             }
 
-            html += "</table>";
-            container.innerHTML = html;
-
+            statusEl.style.display = "none";
             const now = new Date();
             document.getElementById("update-time").textContent =
                 "最後更新：" + now.toLocaleString("zh-TW");
