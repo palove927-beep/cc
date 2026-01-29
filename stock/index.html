@@ -127,14 +127,32 @@
             { code: "2049", exchange: "tse" }
         ];
 
-        function updateStockRow(code, apiData) {
-            const currentPrice = parseFloat(apiData.z) || parseFloat(apiData.l) || 0;
-            const yesterdayPrice = parseFloat(apiData.y) || 0;
+        function getPrice(apiData) {
+            // 優先取 b 值第一個（最新買價），其次 z（成交價），再 l（最低）
+            if (apiData.b && apiData.b !== "-") {
+                var first = apiData.b.split("_")[0];
+                var val = parseFloat(first);
+                if (!isNaN(val) && val > 0) return val;
+            }
+            if (apiData.z && apiData.z !== "-") {
+                var val = parseFloat(apiData.z);
+                if (!isNaN(val) && val > 0) return val;
+            }
+            if (apiData.l && apiData.l !== "-") {
+                var val = parseFloat(apiData.l);
+                if (!isNaN(val) && val > 0) return val;
+            }
+            return 0;
+        }
 
-            let colorClass = "price-flat";
-            let sign = "";
-            let diff = 0;
-            let diffPercent = 0;
+        function updateStockRow(code, apiData) {
+            var currentPrice = getPrice(apiData);
+            var yesterdayPrice = (apiData.y && apiData.y !== "-") ? parseFloat(apiData.y) : 0;
+
+            var colorClass = "price-flat";
+            var sign = "";
+            var diff = 0;
+            var diffPercent = 0;
 
             if (currentPrice && yesterdayPrice) {
                 diff = currentPrice - yesterdayPrice;
@@ -143,10 +161,10 @@
                 else if (diff < 0) { colorClass = "price-down"; }
             }
 
-            const priceEl = document.getElementById("price-" + code);
-            const ycloseEl = document.getElementById("yclose-" + code);
-            const diffEl = document.getElementById("diff-" + code);
-            const pctEl = document.getElementById("pct-" + code);
+            var priceEl = document.getElementById("price-" + code);
+            var ycloseEl = document.getElementById("yclose-" + code);
+            var diffEl = document.getElementById("diff-" + code);
+            var pctEl = document.getElementById("pct-" + code);
 
             if (currentPrice) {
                 priceEl.textContent = currentPrice.toFixed(2);
@@ -163,47 +181,53 @@
             }
         }
 
-        async function fetchStockData() {
-            const statusEl = document.getElementById("status-msg");
-            statusEl.style.display = "block";
-            statusEl.className = "loading";
-            statusEl.textContent = "查詢股價中...";
-
-            const exCh = STOCKS.map(s => s.exchange + "_" + s.code + ".tw").join("|");
-            const url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
-
-            let data = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    if (attempt > 0) {
-                        await new Promise(r => setTimeout(r, 1000 * attempt));
-                    }
-                    const resp = await fetch(url);
-                    if (resp.ok) {
-                        data = await resp.json();
-                        if (data.msgArray && data.msgArray.length > 0) break;
-                    }
-                } catch (e) {
-                    // 繼續重試
-                }
-            }
+        // JSONP callback
+        function jsonpCallback(data) {
+            var statusEl = document.getElementById("status-msg");
 
             if (!data || !data.msgArray || data.msgArray.length === 0) {
+                statusEl.style.display = "block";
                 statusEl.className = "error";
-                statusEl.textContent = "無法取得股價資料（TWSE API 可能有 CORS 限制）";
+                statusEl.textContent = "無法取得股價資料";
                 return;
             }
 
-            for (const stock of data.msgArray) {
+            for (var i = 0; i < data.msgArray.length; i++) {
+                var stock = data.msgArray[i];
                 if (stock.c) {
                     updateStockRow(stock.c, stock);
                 }
             }
 
             statusEl.style.display = "none";
-            const now = new Date();
+            var now = new Date();
             document.getElementById("update-time").textContent =
                 "最後更新：" + now.toLocaleString("zh-TW");
+        }
+
+        function fetchStockData() {
+            var statusEl = document.getElementById("status-msg");
+            statusEl.style.display = "block";
+            statusEl.className = "loading";
+            statusEl.textContent = "查詢股價中...";
+
+            // 移除舊的 script tag
+            var old = document.getElementById("jsonp-script");
+            if (old) old.remove();
+
+            var exCh = STOCKS.map(function(s) {
+                return s.exchange + "_" + s.code + ".tw";
+            }).join("|");
+
+            var script = document.createElement("script");
+            script.id = "jsonp-script";
+            script.src = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json_callback=jsonpCallback&ex_ch=" + exCh;
+            script.onerror = function() {
+                statusEl.style.display = "block";
+                statusEl.className = "error";
+                statusEl.textContent = "無法連線至 TWSE API";
+            };
+            document.body.appendChild(script);
         }
 
         fetchStockData();
