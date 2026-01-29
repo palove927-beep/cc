@@ -132,8 +132,9 @@
                 var val = parseFloat(first);
                 if (!isNaN(val) && val > 0) return val;
             }
-            if (apiData.l && apiData.l !== "-") {
-                var val = parseFloat(apiData.l);
+            if (apiData.a && apiData.a !== "-") {
+                var first = apiData.a.split("_")[0];
+                var val = parseFloat(first);
                 if (!isNaN(val) && val > 0) return val;
             }
             return 0;
