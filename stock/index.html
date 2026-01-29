@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票即時報價</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+        nav {
+            margin-bottom: 24px;
+        }
+        nav a {
+            color: #0366d6;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        nav a:hover { text-decoration: underline; }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .stock-table {
+            width: 100%;
+            max-width: 700px;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stock-table th {
+            background: #24292e;
+            color: #fff;
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 14px;
+        }
+        .stock-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .stock-table tr:last-child td { border-bottom: none; }
+        .price-up { color: #e53935; }
+        .price-down { color: #43a047; }
+        .price-flat { color: #333; }
+        .change-cell {
+            font-weight: bold;
+        }
+        .loading {
+            color: #999;
+            padding: 20px;
+            font-size: 14px;
+        }
+        .error {
+            color: #e53935;
+            padding: 20px;
+            font-size: 14px;
+        }
+        .refresh-btn {
+            margin-top: 16px;
+            padding: 8px 16px;
+            background: #24292e;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover { background: #444; }
+        .update-time {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <nav><a href="/">← 首頁</a></nav>
+    <h1>股票即時報價</h1>
+    <p class="subtitle">資料來源：台灣證券交易所 (TWSE)</p>
+
+    <div id="stock-container">
+        <p class="loading">載入中...</p>
+    </div>
+
+    <button class="refresh-btn" onclick="fetchStockData()">重新整理</button>
+    <div class="update-time" id="update-time"></div>
+
+    <script>
+        const STOCKS = [
+            { code: "2330", exchange: "tse", name: "台積電" },
+            { code: "2303", exchange: "tse", name: "聯電" },
+            { code: "2049", exchange: "tse", name: "上銀" }
+        ];
+
+        async function fetchStockData() {
+            const container = document.getElementById("stock-container");
+            container.innerHTML = '<p class="loading">載入中...</p>';
+
+            const exCh = STOCKS.map(s => s.exchange + "_" + s.code + ".tw").join("|");
+            const url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
+
+            let data = null;
+            // 重試機制：最多 3 次
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                    }
+                    const resp = await fetch(url);
+                    if (resp.ok) {
+                        data = await resp.json();
+                        if (data.msgArray && data.msgArray.length > 0) break;
+                    }
+                } catch (e) {
+                    // 繼續重試
+                }
+            }
+
+            if (!data || !data.msgArray || data.msgArray.length === 0) {
+                container.innerHTML = '<p class="error">無法取得股票資料，請稍後再試。（TWSE API 可能有 CORS 限制，建議透過後端代理存取）</p>';
+                return;
+            }
+
+            let html = '<table class="stock-table">';
+            html += "<tr><th>股票</th><th>代號</th><th>現價</th><th>昨收</th><th>漲跌</th><th>漲跌幅</th></tr>";
+
+            for (const stock of data.msgArray) {
+                const currentPrice = parseFloat(stock.z) || parseFloat(stock.l) || 0;
+                const yesterdayPrice = parseFloat(stock.y) || 0;
+                const diff = currentPrice && yesterdayPrice ? (currentPrice - yesterdayPrice) : 0;
+                const diffPercent = yesterdayPrice ? ((diff / yesterdayPrice) * 100) : 0;
+
+                let colorClass = "price-flat";
+                let sign = "";
+                if (diff > 0) { colorClass = "price-up"; sign = "+"; }
+                else if (diff < 0) { colorClass = "price-down"; }
+
+                const displayPrice = currentPrice ? currentPrice.toFixed(2) : "-";
+                const displayYesterday = yesterdayPrice ? yesterdayPrice.toFixed(2) : "-";
+                const displayDiff = currentPrice && yesterdayPrice ? (sign + diff.toFixed(2)) : "-";
+                const displayPercent = currentPrice && yesterdayPrice ? (sign + diffPercent.toFixed(2) + "%") : "-";
+
+                html += "<tr>";
+                html += "<td>" + (stock.nf || stock.n || "") + "</td>";
+                html += "<td>" + (stock.c || "") + "</td>";
+                html += '<td class="' + colorClass + ' change-cell">' + displayPrice + "</td>";
+                html += "<td>" + displayYesterday + "</td>";
+                html += '<td class="' + colorClass + ' change-cell">' + displayDiff + "</td>";
+                html += '<td class="' + colorClass + ' change-cell">' + displayPercent + "</td>";
+                html += "</tr>";
+            }
+
+            html += "</table>";
+            container.innerHTML = html;
+
+            const now = new Date();
+            document.getElementById("update-time").textContent =
+                "最後更新：" + now.toLocaleString("zh-TW");
+        }
+
+        fetchStockData();
+    </script>
+</body>
+</html>
