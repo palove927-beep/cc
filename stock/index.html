@@ -109,10 +109,16 @@
     <div class="update-time" id="update-time"></div>
 
     <script>
-        const STOCKS = [
+        var STOCKS = [
             { code: "2330", exchange: "tse" },
             { code: "2303", exchange: "tse" },
             { code: "2049", exchange: "tse" }
+        ];
+
+        // CORS proxies（依序嘗試）
+        var PROXIES = [
+            function(url) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
+            function(url) { return "https://corsproxy.io/?" + encodeURIComponent(url); }
         ];
 
         function getPrice(apiData) {
@@ -142,12 +148,35 @@
             }
         }
 
-        // JSONP callback
-        function jsonpCallback(data) {
+        async function fetchStockData() {
             var statusEl = document.getElementById("status-msg");
+            statusEl.style.display = "block";
+            statusEl.className = "loading";
+            statusEl.textContent = "查詢股價中...";
+
+            var exCh = STOCKS.map(function(s) {
+                return s.exchange + "_" + s.code + ".tw";
+            }).join("|");
+
+            var twseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
+            var data = null;
+
+            // 依序嘗試各個 proxy
+            for (var p = 0; p < PROXIES.length; p++) {
+                var proxyUrl = PROXIES[p](twseUrl);
+                try {
+                    var resp = await fetch(proxyUrl);
+                    if (resp.ok) {
+                        data = await resp.json();
+                        if (data && data.msgArray && data.msgArray.length > 0) break;
+                    }
+                } catch (e) {
+                    // 嘗試下一個 proxy
+                }
+                data = null;
+            }
 
             if (!data || !data.msgArray || data.msgArray.length === 0) {
-                statusEl.style.display = "block";
                 statusEl.className = "error";
                 statusEl.textContent = "無法取得股價資料";
                 return;
@@ -164,31 +193,6 @@
             var now = new Date();
             document.getElementById("update-time").textContent =
                 "最後更新：" + now.toLocaleString("zh-TW");
-        }
-
-        function fetchStockData() {
-            var statusEl = document.getElementById("status-msg");
-            statusEl.style.display = "block";
-            statusEl.className = "loading";
-            statusEl.textContent = "查詢股價中...";
-
-            // 移除舊的 script tag
-            var old = document.getElementById("jsonp-script");
-            if (old) old.remove();
-
-            var exCh = STOCKS.map(function(s) {
-                return s.exchange + "_" + s.code + ".tw";
-            }).join("|");
-
-            var script = document.createElement("script");
-            script.id = "jsonp-script";
-            script.src = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json_callback=jsonpCallback&ex_ch=" + exCh;
-            script.onerror = function() {
-                statusEl.style.display = "block";
-                statusEl.className = "error";
-                statusEl.textContent = "無法連線至 TWSE API";
-            };
-            document.body.appendChild(script);
         }
 
         fetchStockData();
