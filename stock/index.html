@@ -52,9 +52,6 @@
             font-size: 14px;
         }
         .stock-table tr:last-child td { border-bottom: none; }
-        .price-up { color: #e53935; }
-        .price-down { color: #43a047; }
-        .price-flat { color: #333; }
         .change-cell {
             font-weight: bold;
         }
@@ -92,27 +89,18 @@
     <p class="subtitle">資料來源：台灣證券交易所 (TWSE)</p>
 
     <table class="stock-table">
-        <tr><th>股票</th><th>代號</th><th>現價</th><th>昨收</th><th>漲跌</th><th>漲跌幅</th></tr>
+        <tr><th>股票</th><th>代號</th><th>現價</th></tr>
         <tr>
             <td>台積電</td><td>2330</td>
             <td id="price-2330" class="change-cell">-</td>
-            <td id="yclose-2330">-</td>
-            <td id="diff-2330" class="change-cell">-</td>
-            <td id="pct-2330" class="change-cell">-</td>
         </tr>
         <tr>
             <td>聯電</td><td>2303</td>
             <td id="price-2303" class="change-cell">-</td>
-            <td id="yclose-2303">-</td>
-            <td id="diff-2303" class="change-cell">-</td>
-            <td id="pct-2303" class="change-cell">-</td>
         </tr>
         <tr>
             <td>上銀</td><td>2049</td>
             <td id="price-2049" class="change-cell">-</td>
-            <td id="yclose-2049">-</td>
-            <td id="diff-2049" class="change-cell">-</td>
-            <td id="pct-2049" class="change-cell">-</td>
         </tr>
     </table>
 
@@ -147,37 +135,10 @@
 
         function updateStockRow(code, apiData) {
             var currentPrice = getPrice(apiData);
-            var yesterdayPrice = (apiData.y && apiData.y !== "-") ? parseFloat(apiData.y) : 0;
-
-            var colorClass = "price-flat";
-            var sign = "";
-            var diff = 0;
-            var diffPercent = 0;
-
-            if (currentPrice && yesterdayPrice) {
-                diff = currentPrice - yesterdayPrice;
-                diffPercent = (diff / yesterdayPrice) * 100;
-                if (diff > 0) { colorClass = "price-up"; sign = "+"; }
-                else if (diff < 0) { colorClass = "price-down"; }
-            }
-
             var priceEl = document.getElementById("price-" + code);
-            var ycloseEl = document.getElementById("yclose-" + code);
-            var diffEl = document.getElementById("diff-" + code);
-            var pctEl = document.getElementById("pct-" + code);
 
             if (currentPrice) {
                 priceEl.textContent = currentPrice.toFixed(2);
-                priceEl.className = "change-cell " + colorClass;
-            }
-            if (yesterdayPrice) {
-                ycloseEl.textContent = yesterdayPrice.toFixed(2);
-            }
-            if (currentPrice && yesterdayPrice) {
-                diffEl.textContent = sign + diff.toFixed(2);
-                diffEl.className = "change-cell " + colorClass;
-                pctEl.textContent = sign + diffPercent.toFixed(2) + "%";
-                pctEl.className = "change-cell " + colorClass;
             }
         }
 
