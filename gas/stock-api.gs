@@ -1,26 +1,24 @@
 /**
  * TWSE 股票即時報價 - Google Apps Script
  *
- * 使用方式一：自訂函數（直接在儲存格輸入）
+ * 使用方式：自訂函數（直接在儲存格輸入）
  *   =getStockPrice("2330")          → 取得現價
  *   =getStockPrice("2330", "name")  → 取得公司名稱
  *
- * 使用方式二：部署為 Web App API
- *   https://script.google.com/macros/s/xxx/exec?code=2330
- *   https://script.google.com/macros/s/xxx/exec?code=2330&field=name
+ * 資料來源（依序嘗試）：
+ *   1. Cloudflare Worker API（需先部署 worker/stock-api.js）
+ *   2. 直接呼叫 TWSE API（備用）
  *
  * 安裝步驟：
  *   1. 開啟 Google Sheets
  *   2. 選單 → 擴充功能 → Apps Script
  *   3. 貼上此程式碼，儲存
- *   4. 在儲存格輸入 =getStockPrice("2330") 即可使用
- *
- * 部署為 API：
- *   1. Apps Script 編輯器 → 部署 → 新增部署作業
- *   2. 類型選「網頁應用程式」
- *   3. 存取權限設為「所有人」
- *   4. 部署後取得 URL
+ *   4. 將 WORKER_URL 替換為你的 Cloudflare Worker URL
+ *   5. 在儲存格輸入 =getStockPrice("2330") 即可使用
  */
+
+// TODO: 部署 Cloudflare Worker 後，將下方 URL 替換為你的 Worker URL
+var WORKER_URL = "";
 
 /**
  * 取得股票現價
@@ -41,7 +39,14 @@ function getStockPrice(code, field) {
   if (cached) {
     stock = JSON.parse(cached);
   } else {
-    stock = fetchTWSEStock(code);
+    // 優先透過 Cloudflare Worker
+    if (WORKER_URL) {
+      stock = fetchViaWorker(code);
+    }
+    // 備用：直接呼叫 TWSE
+    if (!stock) {
+      stock = fetchTWSEStock(code);
+    }
     if (stock) {
       cache.put(cacheKey, JSON.stringify(stock), 60);
     }
@@ -53,12 +58,12 @@ function getStockPrice(code, field) {
 
   switch (field) {
     case "name":
-      return stock.n || "無資料";
+      return stock.n || stock.name || "無資料";
     case "full_name":
-      return stock.nf || "無資料";
+      return stock.nf || stock.full_name || "無資料";
     case "price":
     default:
-      return getStockCurrentPrice(stock);
+      return stock.price || getStockCurrentPrice(stock);
   }
 }
 
@@ -85,7 +90,27 @@ function getStockCurrentPrice(stock) {
 }
 
 /**
- * 抓取 TWSE 股票資料（含重試機制）
+ * 透過 Cloudflare Worker 取得股票資料
+ */
+function fetchViaWorker(code) {
+  try {
+    var resp = UrlFetchApp.fetch(WORKER_URL + "/api/stock?code=" + code, {
+      "muteHttpExceptions": true
+    });
+    if (resp.getResponseCode() == 200) {
+      var result = JSON.parse(resp.getContentText());
+      if (result.data && result.data.length > 0) {
+        return result.data[0];
+      }
+    }
+  } catch (e) {
+    // fallback to direct TWSE
+  }
+  return null;
+}
+
+/**
+ * 備用：直接抓取 TWSE 股票資料（含重試機制）
  */
 function fetchTWSEStock(code) {
   var options = {
@@ -121,51 +146,3 @@ function fetchTWSEStock(code) {
   return null;
 }
 
-/**
- * Web App API endpoint
- * GET ?code=2330 → {"code":"2330","name":"台積電","price":1810}
- * GET ?code=2330&field=name → {"code":"2330","name":"台積電"}
- */
-function doGet(e) {
-  var code = e.parameter.code;
-  if (!code) {
-    return jsonResponse({ error: "請提供 code 參數，例如 ?code=2330" });
-  }
-
-  var field = e.parameter.field || "all";
-  var cache = CacheService.getScriptCache();
-  var cacheKey = "stock_" + code;
-  var cached = cache.get(cacheKey);
-
-  var stock;
-  if (cached) {
-    stock = JSON.parse(cached);
-  } else {
-    stock = fetchTWSEStock(code);
-    if (stock) {
-      cache.put(cacheKey, JSON.stringify(stock), 60);
-    }
-  }
-
-  if (!stock) {
-    return jsonResponse({ error: "無資料", code: code });
-  }
-
-  var result = { code: code };
-
-  if (field === "all" || field === "name") {
-    result.name = stock.n || "";
-    result.full_name = stock.nf || "";
-  }
-  if (field === "all" || field === "price") {
-    result.price = getStockCurrentPrice(stock);
-  }
-
-  return jsonResponse(result);
-}
-
-function jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}

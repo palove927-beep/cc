@@ -115,7 +115,11 @@
             { code: "2049", exchange: "tse" }
         ];
 
-        // CORS proxies（依序嘗試）
+        // TODO: 部署 Cloudflare Worker 後，將下方 URL 替換為你的 Worker URL
+        // 例如：https://stock-api.你的帳號.workers.dev
+        var WORKER_URL = "";
+
+        // CORS proxies 備用
         var PROXIES = [
             function(url) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
             function(url) { return "https://corsproxy.io/?" + encodeURIComponent(url); }
@@ -140,13 +144,56 @@
             return 0;
         }
 
-        function updateStockRow(code, apiData) {
-            var currentPrice = getPrice(apiData);
+        function updatePrice(code, price) {
             var priceEl = document.getElementById("price-" + code);
-
-            if (currentPrice) {
-                priceEl.textContent = currentPrice.toFixed(2);
+            if (price) {
+                priceEl.textContent = price.toFixed(2);
             }
+        }
+
+        // 方式一：透過 Cloudflare Worker
+        async function fetchViaWorker() {
+            var codes = STOCKS.map(function(s) { return s.code; }).join(",");
+            var resp = await fetch(WORKER_URL + "/api/stock?code=" + codes);
+            if (!resp.ok) return false;
+            var result = await resp.json();
+            if (!result.data || result.data.length === 0) return false;
+            for (var i = 0; i < result.data.length; i++) {
+                var s = result.data[i];
+                if (s.code && s.price) {
+                    updatePrice(s.code, s.price);
+                }
+            }
+            return true;
+        }
+
+        // 方式二：透過 CORS proxy 備用
+        async function fetchViaProxy() {
+            var exCh = STOCKS.map(function(s) {
+                return s.exchange + "_" + s.code + ".tw";
+            }).join("|");
+            var twseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
+
+            for (var p = 0; p < PROXIES.length; p++) {
+                try {
+                    var resp = await fetch(PROXIES[p](twseUrl));
+                    if (resp.ok) {
+                        var data = await resp.json();
+                        if (data && data.msgArray && data.msgArray.length > 0) {
+                            for (var i = 0; i < data.msgArray.length; i++) {
+                                var stock = data.msgArray[i];
+                                if (stock.c) {
+                                    updatePrice(stock.c, getPrice(stock));
+                                }
+                            }
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // 嘗試下一個 proxy
+                }
+            }
+            return false;
         }
 
         async function fetchStockData() {
@@ -155,45 +202,35 @@
             statusEl.className = "loading";
             statusEl.textContent = "查詢股價中...";
 
-            var exCh = STOCKS.map(function(s) {
-                return s.exchange + "_" + s.code + ".tw";
-            }).join("|");
+            var success = false;
 
-            var twseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
-            var data = null;
-
-            // 依序嘗試各個 proxy
-            for (var p = 0; p < PROXIES.length; p++) {
-                var proxyUrl = PROXIES[p](twseUrl);
+            // 優先使用 Cloudflare Worker
+            if (WORKER_URL) {
                 try {
-                    var resp = await fetch(proxyUrl);
-                    if (resp.ok) {
-                        data = await resp.json();
-                        if (data && data.msgArray && data.msgArray.length > 0) break;
-                    }
+                    success = await fetchViaWorker();
                 } catch (e) {
-                    // 嘗試下一個 proxy
+                    // fallback to proxy
                 }
-                data = null;
             }
 
-            if (!data || !data.msgArray || data.msgArray.length === 0) {
+            // 備用：CORS proxy
+            if (!success) {
+                try {
+                    success = await fetchViaProxy();
+                } catch (e) {
+                    // all failed
+                }
+            }
+
+            if (success) {
+                statusEl.style.display = "none";
+                var now = new Date();
+                document.getElementById("update-time").textContent =
+                    "最後更新：" + now.toLocaleString("zh-TW");
+            } else {
                 statusEl.className = "error";
                 statusEl.textContent = "無法取得股價資料";
-                return;
             }
-
-            for (var i = 0; i < data.msgArray.length; i++) {
-                var stock = data.msgArray[i];
-                if (stock.c) {
-                    updateStockRow(stock.c, stock);
-                }
-            }
-
-            statusEl.style.display = "none";
-            var now = new Date();
-            document.getElementById("update-time").textContent =
-                "最後更新：" + now.toLocaleString("zh-TW");
         }
 
         fetchStockData();
