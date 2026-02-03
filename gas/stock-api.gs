@@ -17,7 +17,10 @@
  *   5. 在儲存格輸入 =getStockPrice("2330") 即可使用
  */
 
-// TODO: 部署 Cloudflare Worker 後，將下方 URL 替換為你的 Worker URL
+// Cloudflare Worker URL（可選）
+// 若已部署 worker/stock-api.js，填入 Worker URL 可獲得更快速穩定的連線
+// 例如：https://stock-api.your-account.workers.dev
+// 若留空，將自動使用直接呼叫 TWSE API 的備用方案
 var WORKER_URL = "";
 
 /**
