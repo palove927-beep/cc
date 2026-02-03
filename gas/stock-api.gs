@@ -17,8 +17,8 @@
  *   5. 在儲存格輸入 =getStockPrice("2330") 即可使用
  */
 
-// TODO: 部署 Cloudflare Worker 後，將下方 URL 替換為你的 Worker URL
-var WORKER_URL = "";
+// Cloudflare Worker URL
+var WORKER_URL = "https://cc.palove927.workers.dev";
 
 /**
  * 取得股票現價
