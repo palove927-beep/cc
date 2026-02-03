@@ -12,24 +12,11 @@
             color: #333;
             padding: 20px;
         }
-        nav {
-            margin-bottom: 24px;
-        }
-        nav a {
-            color: #0366d6;
-            text-decoration: none;
-            font-size: 14px;
-        }
+        nav { margin-bottom: 24px; }
+        nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
         nav a:hover { text-decoration: underline; }
-        h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 24px;
-        }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
         .stock-table {
             width: 100%;
             max-width: 700px;
@@ -38,6 +25,7 @@
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
         }
         .stock-table th {
             background: #24292e;
@@ -47,26 +35,20 @@
             font-size: 14px;
         }
         .stock-table td {
-            padding: 12px 16px;
+            padding: 10px 16px;
             border-bottom: 1px solid #eee;
             font-size: 14px;
         }
         .stock-table tr:last-child td { border-bottom: none; }
-        .change-cell {
+        .category-row td {
+            background: #e8f4fd;
             font-weight: bold;
+            color: #0366d6;
         }
-        .loading {
-            color: #999;
-            padding: 20px;
-            font-size: 14px;
-        }
-        .error {
-            color: #e53935;
-            padding: 20px;
-            font-size: 14px;
-        }
+        .change-cell { font-weight: bold; }
+        .loading { color: #999; padding: 20px; font-size: 14px; }
+        .error { color: #e53935; padding: 20px; font-size: 14px; }
         .refresh-btn {
-            margin-top: 16px;
             padding: 8px 16px;
             background: #24292e;
             color: #fff;
@@ -76,11 +58,7 @@
             font-size: 14px;
         }
         .refresh-btn:hover { background: #444; }
-        .update-time {
-            margin-top: 12px;
-            font-size: 12px;
-            color: #999;
-        }
+        .update-time { margin-top: 12px; font-size: 12px; color: #999; }
     </style>
 </head>
 <body>
@@ -89,19 +67,125 @@
     <p class="subtitle">資料來源：台灣證券交易所 (TWSE)</p>
 
     <table class="stock-table">
-        <tr><th>股票</th><th>代號</th><th>現價</th></tr>
-        <tr>
-            <td>台積電</td><td>2330</td>
-            <td id="price-2330" class="change-cell">-</td>
-        </tr>
-        <tr>
-            <td>聯電</td><td>2303</td>
-            <td id="price-2303" class="change-cell">-</td>
-        </tr>
-        <tr>
-            <td>上銀</td><td>2049</td>
-            <td id="price-2049" class="change-cell">-</td>
-        </tr>
+        <tr><th>類別</th><th>股票</th><th>代號</th><th>現價</th></tr>
+        <!-- IC設計 -->
+        <tr class="category-row"><td colspan="4">IC設計</td></tr>
+        <tr><td></td><td>瑞昱</td><td>2379</td><td id="price-2379" class="change-cell">-</td></tr>
+        <tr><td></td><td>聯發科</td><td>2454</td><td id="price-2454" class="change-cell">-</td></tr>
+        <tr><td></td><td>聯詠</td><td>3034</td><td id="price-3034" class="change-cell">-</td></tr>
+        <tr><td></td><td>信驊</td><td>5274</td><td id="price-5274" class="change-cell">-</td></tr>
+        <!-- 晶圓代工 -->
+        <tr class="category-row"><td colspan="4">晶圓代工</td></tr>
+        <tr><td></td><td>聯電</td><td>2303</td><td id="price-2303" class="change-cell">-</td></tr>
+        <tr><td></td><td>台積電</td><td>2330</td><td id="price-2330" class="change-cell">-</td></tr>
+        <tr><td></td><td>世界</td><td>5347</td><td id="price-5347" class="change-cell">-</td></tr>
+        <!-- 半導體封測 -->
+        <tr class="category-row"><td colspan="4">半導體封測/檢測</td></tr>
+        <tr><td></td><td>日月光</td><td>3711</td><td id="price-3711" class="change-cell">-</td></tr>
+        <tr><td></td><td>力成</td><td>6239</td><td id="price-6239" class="change-cell">-</td></tr>
+        <tr><td></td><td>矽格</td><td>6257</td><td id="price-6257" class="change-cell">-</td></tr>
+        <tr><td></td><td>閎康</td><td>3587</td><td id="price-3587" class="change-cell">-</td></tr>
+        <!-- 半導體耗材 -->
+        <tr class="category-row"><td colspan="4">半導體耗材</td></tr>
+        <tr><td></td><td>中砂</td><td>1560</td><td id="price-1560" class="change-cell">-</td></tr>
+        <tr><td></td><td>中華化</td><td>1727</td><td id="price-1727" class="change-cell">-</td></tr>
+        <tr><td></td><td>家登</td><td>3680</td><td id="price-3680" class="change-cell">-</td></tr>
+        <tr><td></td><td>環球晶</td><td>6488</td><td id="price-6488" class="change-cell">-</td></tr>
+        <!-- 半導體廠務 -->
+        <tr class="category-row"><td colspan="4">半導體廠務</td></tr>
+        <tr><td></td><td>和淞</td><td>6826</td><td id="price-6826" class="change-cell">-</td></tr>
+        <!-- 半導體設備 -->
+        <tr class="category-row"><td colspan="4">半導體設備</td></tr>
+        <tr><td></td><td>志聖</td><td>2467</td><td id="price-2467" class="change-cell">-</td></tr>
+        <tr><td></td><td>弘塑</td><td>3131</td><td id="price-3131" class="change-cell">-</td></tr>
+        <tr><td></td><td>由田</td><td>3455</td><td id="price-3455" class="change-cell">-</td></tr>
+        <tr><td></td><td>牧德</td><td>3563</td><td id="price-3563" class="change-cell">-</td></tr>
+        <tr><td></td><td>迅得</td><td>6438</td><td id="price-6438" class="change-cell">-</td></tr>
+        <tr><td></td><td>群翊</td><td>6664</td><td id="price-6664" class="change-cell">-</td></tr>
+        <tr><td></td><td>天虹</td><td>6937</td><td id="price-6937" class="change-cell">-</td></tr>
+        <tr><td></td><td>倍利科</td><td>7822</td><td id="price-7822" class="change-cell">-</td></tr>
+        <tr><td></td><td>政美應用</td><td>7853</td><td id="price-7853" class="change-cell">-</td></tr>
+        <tr><td></td><td>鈦昇</td><td>8027</td><td id="price-8027" class="change-cell">-</td></tr>
+        <!-- III-V族 -->
+        <tr class="category-row"><td colspan="4">III-V族</td></tr>
+        <tr><td></td><td>全新</td><td>2455</td><td id="price-2455" class="change-cell">-</td></tr>
+        <tr><td></td><td>聯亞</td><td>3081</td><td id="price-3081" class="change-cell">-</td></tr>
+        <tr><td></td><td>穩懋</td><td>3105</td><td id="price-3105" class="change-cell">-</td></tr>
+        <tr><td></td><td>宏捷科</td><td>8086</td><td id="price-8086" class="change-cell">-</td></tr>
+        <!-- 記憶體 -->
+        <tr class="category-row"><td colspan="4">記憶體</td></tr>
+        <tr><td></td><td>旺宏</td><td>2337</td><td id="price-2337" class="change-cell">-</td></tr>
+        <tr><td></td><td>華邦電</td><td>2344</td><td id="price-2344" class="change-cell">-</td></tr>
+        <tr><td></td><td>南亞科</td><td>2408</td><td id="price-2408" class="change-cell">-</td></tr>
+        <tr><td></td><td>威剛</td><td>3260</td><td id="price-3260" class="change-cell">-</td></tr>
+        <tr><td></td><td>十銓</td><td>4967</td><td id="price-4967" class="change-cell">-</td></tr>
+        <tr><td></td><td>愛普</td><td>6531</td><td id="price-6531" class="change-cell">-</td></tr>
+        <tr><td></td><td>群聯</td><td>8299</td><td id="price-8299" class="change-cell">-</td></tr>
+        <!-- 品牌/ODM -->
+        <tr class="category-row"><td colspan="4">品牌/ODM</td></tr>
+        <tr><td></td><td>鴻海</td><td>2317</td><td id="price-2317" class="change-cell">-</td></tr>
+        <tr><td></td><td>技嘉</td><td>2376</td><td id="price-2376" class="change-cell">-</td></tr>
+        <tr><td></td><td>廣達</td><td>2382</td><td id="price-2382" class="change-cell">-</td></tr>
+        <tr><td></td><td>川湖</td><td>2059</td><td id="price-2059" class="change-cell">-</td></tr>
+        <tr><td></td><td>光寶科</td><td>2301</td><td id="price-2301" class="change-cell">-</td></tr>
+        <tr><td></td><td>台達電</td><td>2308</td><td id="price-2308" class="change-cell">-</td></tr>
+        <!-- 電子零組件 -->
+        <tr class="category-row"><td colspan="4">電子零組件</td></tr>
+        <tr><td></td><td>奇鋐</td><td>3017</td><td id="price-3017" class="change-cell">-</td></tr>
+        <tr><td></td><td>雙鴻</td><td>3324</td><td id="price-3324" class="change-cell">-</td></tr>
+        <tr><td></td><td>臺慶科</td><td>3357</td><td id="price-3357" class="change-cell">-</td></tr>
+        <tr><td></td><td>嘉澤</td><td>3533</td><td id="price-3533" class="change-cell">-</td></tr>
+        <tr><td></td><td>鈺邦</td><td>6449</td><td id="price-6449" class="change-cell">-</td></tr>
+        <tr><td></td><td>南俊國際</td><td>6584</td><td id="price-6584" class="change-cell">-</td></tr>
+        <tr><td></td><td>富世達</td><td>6805</td><td id="price-6805" class="change-cell">-</td></tr>
+        <tr><td></td><td>勤誠</td><td>8210</td><td id="price-8210" class="change-cell">-</td></tr>
+        <!-- PCB -->
+        <tr class="category-row"><td colspan="4">PCB</td></tr>
+        <tr><td></td><td>華通</td><td>2313</td><td id="price-2313" class="change-cell">-</td></tr>
+        <tr><td></td><td>欣興</td><td>3037</td><td id="price-3037" class="change-cell">-</td></tr>
+        <tr><td></td><td>定穎投控</td><td>3715</td><td id="price-3715" class="change-cell">-</td></tr>
+        <tr><td></td><td>臻鼎-KY</td><td>4958</td><td id="price-4958" class="change-cell">-</td></tr>
+        <tr><td></td><td>精成科</td><td>6191</td><td id="price-6191" class="change-cell">-</td></tr>
+        <!-- 車用零組件 -->
+        <tr class="category-row"><td colspan="4">車用零組件</td></tr>
+        <tr><td></td><td>順德</td><td>2351</td><td id="price-2351" class="change-cell">-</td></tr>
+        <tr><td></td><td>同欣電</td><td>6271</td><td id="price-6271" class="change-cell">-</td></tr>
+        <tr><td></td><td>朋程</td><td>8255</td><td id="price-8255" class="change-cell">-</td></tr>
+        <!-- 功率元件 -->
+        <tr class="category-row"><td colspan="4">功率元件</td></tr>
+        <tr><td></td><td>台半</td><td>5425</td><td id="price-5425" class="change-cell">-</td></tr>
+        <!-- 航太軍工 -->
+        <tr class="category-row"><td colspan="4">航太軍工</td></tr>
+        <tr><td></td><td>長榮航太</td><td>2645</td><td id="price-2645" class="change-cell">-</td></tr>
+        <tr><td></td><td>豐達科</td><td>3004</td><td id="price-3004" class="change-cell">-</td></tr>
+        <tr><td></td><td>全訊</td><td>5222</td><td id="price-5222" class="change-cell">-</td></tr>
+        <tr><td></td><td>龍德造船</td><td>6753</td><td id="price-6753" class="change-cell">-</td></tr>
+        <!-- 銅箔基板 -->
+        <tr class="category-row"><td colspan="4">銅箔基板</td></tr>
+        <tr><td></td><td>台光電</td><td>2383</td><td id="price-2383" class="change-cell">-</td></tr>
+        <tr><td></td><td>台燿</td><td>6274</td><td id="price-6274" class="change-cell">-</td></tr>
+        <tr><td></td><td>金居</td><td>8358</td><td id="price-8358" class="change-cell">-</td></tr>
+        <!-- 機器系統 -->
+        <tr class="category-row"><td colspan="4">機器系統</td></tr>
+        <tr><td></td><td>智易</td><td>3596</td><td id="price-3596" class="change-cell">-</td></tr>
+        <tr><td></td><td>正文</td><td>4906</td><td id="price-4906" class="change-cell">-</td></tr>
+        <tr><td></td><td>中磊</td><td>5388</td><td id="price-5388" class="change-cell">-</td></tr>
+        <tr><td></td><td>啟碁</td><td>6285</td><td id="price-6285" class="change-cell">-</td></tr>
+        <!-- 自行車 -->
+        <tr class="category-row"><td colspan="4">自行車</td></tr>
+        <tr><td></td><td>美利達</td><td>9914</td><td id="price-9914" class="change-cell">-</td></tr>
+        <tr><td></td><td>桂盟</td><td>5306</td><td id="price-5306" class="change-cell">-</td></tr>
+        <!-- 循環經濟 -->
+        <tr class="category-row"><td colspan="4">循環經濟</td></tr>
+        <tr><td></td><td>衛司特</td><td>6894</td><td id="price-6894" class="change-cell">-</td></tr>
+        <tr><td></td><td>國統</td><td>8936</td><td id="price-8936" class="change-cell">-</td></tr>
+        <!-- 紡織製鞋 -->
+        <tr class="category-row"><td colspan="4">紡織製鞋</td></tr>
+        <tr><td></td><td>志強-KY</td><td>6768</td><td id="price-6768" class="change-cell">-</td></tr>
+        <tr><td></td><td>來億-KY</td><td>6890</td><td id="price-6890" class="change-cell">-</td></tr>
+        <tr><td></td><td>裕慶-KY</td><td>6957</td><td id="price-6957" class="change-cell">-</td></tr>
+        <tr><td></td><td>鈺齊-KY</td><td>9802</td><td id="price-9802" class="change-cell">-</td></tr>
+        <tr><td></td><td>百和</td><td>9938</td><td id="price-9938" class="change-cell">-</td></tr>
     </table>
 
     <div id="status-msg" class="loading" style="display:none;"></div>
@@ -110,89 +194,54 @@
 
     <script>
         var STOCKS = [
-            { code: "2330", exchange: "tse" },
-            { code: "2303", exchange: "tse" },
-            { code: "2049", exchange: "tse" }
+            // IC設計
+            "2379", "2454", "3034", "5274",
+            // 晶圓代工
+            "2303", "2330", "5347",
+            // 半導體封測/檢測
+            "3711", "6239", "6257", "3587",
+            // 半導體耗材
+            "1560", "1727", "3680", "6488",
+            // 半導體廠務
+            "6826",
+            // 半導體設備
+            "2467", "3131", "3455", "3563", "6438", "6664", "6937", "7822", "7853", "8027",
+            // III-V族
+            "2455", "3081", "3105", "8086",
+            // 記憶體
+            "2337", "2344", "2408", "3260", "4967", "6531", "8299",
+            // 品牌/ODM
+            "2317", "2376", "2382", "2059", "2301", "2308",
+            // 電子零組件
+            "3017", "3324", "3357", "3533", "6449", "6584", "6805", "8210",
+            // PCB
+            "2313", "3037", "3715", "4958", "6191",
+            // 車用零組件
+            "2351", "6271", "8255",
+            // 功率元件
+            "5425",
+            // 航太軍工
+            "2645", "3004", "5222", "6753",
+            // 銅箔基板
+            "2383", "6274", "8358",
+            // 機器系統
+            "3596", "4906", "5388", "6285",
+            // 自行車
+            "9914", "5306",
+            // 循環經濟
+            "6894", "8936",
+            // 紡織製鞋
+            "6768", "6890", "6957", "9802", "9938"
         ];
 
         // Cloudflare Worker URL
         var WORKER_URL = "https://cc.palove927.workers.dev";
 
-        // CORS proxies 備用
-        var PROXIES = [
-            function(url) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
-            function(url) { return "https://corsproxy.io/?" + encodeURIComponent(url); }
-        ];
-
-        function getPrice(apiData) {
-            // 優先取 z（成交價），其次 b 值第一個（最新買價）
-            if (apiData.z && apiData.z !== "-") {
-                var val = parseFloat(apiData.z);
-                if (!isNaN(val) && val > 0) return val;
-            }
-            if (apiData.b && apiData.b !== "-") {
-                var first = apiData.b.split("_")[0];
-                var val = parseFloat(first);
-                if (!isNaN(val) && val > 0) return val;
-            }
-            if (apiData.a && apiData.a !== "-") {
-                var first = apiData.a.split("_")[0];
-                var val = parseFloat(first);
-                if (!isNaN(val) && val > 0) return val;
-            }
-            return 0;
-        }
-
         function updatePrice(code, price) {
             var priceEl = document.getElementById("price-" + code);
-            if (price) {
+            if (priceEl && price) {
                 priceEl.textContent = price.toFixed(2);
             }
-        }
-
-        // 方式一：透過 Cloudflare Worker
-        async function fetchViaWorker() {
-            var codes = STOCKS.map(function(s) { return s.code; }).join(",");
-            var resp = await fetch(WORKER_URL + "/api/stock?code=" + codes);
-            if (!resp.ok) return false;
-            var result = await resp.json();
-            if (!result.data || result.data.length === 0) return false;
-            for (var i = 0; i < result.data.length; i++) {
-                var s = result.data[i];
-                if (s.code && s.price) {
-                    updatePrice(s.code, s.price);
-                }
-            }
-            return true;
-        }
-
-        // 方式二：透過 CORS proxy 備用
-        async function fetchViaProxy() {
-            var exCh = STOCKS.map(function(s) {
-                return s.exchange + "_" + s.code + ".tw";
-            }).join("|");
-            var twseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
-
-            for (var p = 0; p < PROXIES.length; p++) {
-                try {
-                    var resp = await fetch(PROXIES[p](twseUrl));
-                    if (resp.ok) {
-                        var data = await resp.json();
-                        if (data && data.msgArray && data.msgArray.length > 0) {
-                            for (var i = 0; i < data.msgArray.length; i++) {
-                                var stock = data.msgArray[i];
-                                if (stock.c) {
-                                    updatePrice(stock.c, getPrice(stock));
-                                }
-                            }
-                            return true;
-                        }
-                    }
-                } catch (e) {
-                    // 嘗試下一個 proxy
-                }
-            }
-            return false;
         }
 
         async function fetchStockData() {
@@ -201,35 +250,31 @@
             statusEl.className = "loading";
             statusEl.textContent = "查詢股價中...";
 
-            var success = false;
-
-            // 優先使用 Cloudflare Worker
-            if (WORKER_URL) {
-                try {
-                    success = await fetchViaWorker();
-                } catch (e) {
-                    // fallback to proxy
+            try {
+                var codes = STOCKS.join(",");
+                var resp = await fetch(WORKER_URL + "/api/stock?code=" + codes);
+                if (resp.ok) {
+                    var result = await resp.json();
+                    if (result.data && result.data.length > 0) {
+                        for (var i = 0; i < result.data.length; i++) {
+                            var s = result.data[i];
+                            if (s.code && s.price) {
+                                updatePrice(s.code, s.price);
+                            }
+                        }
+                        statusEl.style.display = "none";
+                        var now = new Date();
+                        document.getElementById("update-time").textContent =
+                            "最後更新：" + now.toLocaleString("zh-TW");
+                        return;
+                    }
                 }
+            } catch (e) {
+                console.error(e);
             }
 
-            // 備用：CORS proxy
-            if (!success) {
-                try {
-                    success = await fetchViaProxy();
-                } catch (e) {
-                    // all failed
-                }
-            }
-
-            if (success) {
-                statusEl.style.display = "none";
-                var now = new Date();
-                document.getElementById("update-time").textContent =
-                    "最後更新：" + now.toLocaleString("zh-TW");
-            } else {
-                statusEl.className = "error";
-                statusEl.textContent = "無法取得股價資料";
-            }
+            statusEl.className = "error";
+            statusEl.textContent = "無法取得股價資料";
         }
 
         fetchStockData();

@@ -48,57 +48,94 @@ async function handleStock(url) {
   if (codes.length === 0) {
     return jsonResponse({ error: "股票代號不可為空" }, 400);
   }
-  if (codes.length > 20) {
-    return jsonResponse({ error: "一次最多查詢 20 支股票" }, 400);
+  if (codes.length > 100) {
+    return jsonResponse({ error: "一次最多查詢 100 支股票" }, 400);
   }
 
-  // 組合查詢字串（預設上市 tse，可用 otc_ 前綴指定上櫃）
-  var exCh = codes.map(function(code) {
-    if (code.startsWith("otc_")) {
-      return "otc_" + code.slice(4) + ".tw";
-    }
-    return "tse_" + code + ".tw";
-  }).join("|");
+  // 同時查詢 tse 和 otc
+  var tseExCh = codes.map(function(code) { return "tse_" + code + ".tw"; }).join("|");
+  var otcExCh = codes.map(function(code) { return "otc_" + code + ".tw"; }).join("|");
 
-  var twseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + exCh;
+  var tseUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + tseExCh;
+  var otcUrl = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + otcExCh;
 
-  var data = null;
-  // 重試機制
-  for (var attempt = 0; attempt < 3; attempt++) {
-    try {
-      if (attempt > 0) {
-        await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+  // 並行查詢 tse 和 otc
+  var [tseData, otcData] = await Promise.all([
+    fetchTWSE(tseUrl),
+    fetchTWSE(otcUrl)
+  ]);
+
+  // 合併結果（以 code 為 key，tse 優先）
+  var stockMap = {};
+
+  if (otcData && otcData.msgArray) {
+    for (var i = 0; i < otcData.msgArray.length; i++) {
+      var stock = otcData.msgArray[i];
+      if (stock.c && hasValidPrice(stock)) {
+        stockMap[stock.c] = stock;
       }
-      var resp = await fetch(twseUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" }
+    }
+  }
+
+  if (tseData && tseData.msgArray) {
+    for (var i = 0; i < tseData.msgArray.length; i++) {
+      var stock = tseData.msgArray[i];
+      if (stock.c && hasValidPrice(stock)) {
+        stockMap[stock.c] = stock;  // tse 覆蓋 otc
+      }
+    }
+  }
+
+  // 按原始順序輸出
+  var result = [];
+  for (var i = 0; i < codes.length; i++) {
+    var code = codes[i];
+    var stock = stockMap[code];
+    if (stock) {
+      result.push({
+        code: stock.c,
+        name: stock.n || "",
+        full_name: stock.nf || "",
+        price: getPrice(stock)
       });
-      if (resp.ok) {
-        data = await resp.json();
-        if (data && data.msgArray && data.msgArray.length > 0) break;
-      }
-    } catch (e) {
-      // 重試
     }
-    data = null;
   }
 
-  if (!data || !data.msgArray || data.msgArray.length === 0) {
-    return jsonResponse({ error: "無法取得 TWSE 資料，請稍後再試" }, 502);
+  if (result.length === 0) {
+    return jsonResponse({ error: "無法取得股票資料" }, 502);
   }
-
-  var result = data.msgArray.map(function(stock) {
-    return {
-      code: stock.c,
-      name: stock.n || "",
-      full_name: stock.nf || "",
-      price: getPrice(stock)
-    };
-  });
 
   return jsonResponse({
     data: result,
     time: new Date().toISOString()
   });
+}
+
+function hasValidPrice(stock) {
+  if (stock.z && stock.z !== "-") return true;
+  if (stock.b && stock.b !== "-") return true;
+  if (stock.a && stock.a !== "-") return true;
+  return false;
+}
+
+async function fetchTWSE(url) {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise(function(r) { setTimeout(r, 500 * attempt); });
+      }
+      var resp = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+      if (resp.ok) {
+        var data = await resp.json();
+        if (data && data.msgArray) return data;
+      }
+    } catch (e) {
+      // 重試
+    }
+  }
+  return null;
 }
 
 /**
