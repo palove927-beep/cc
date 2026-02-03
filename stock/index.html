@@ -239,49 +239,12 @@
 
         // Cloudflare Worker URL
         var WORKER_URL = "https://cc.palove927.workers.dev";
-        var CACHE_KEY = "stock_prices_cache";
-        var CACHE_TIME_KEY = "stock_prices_time";
 
         function updatePrice(code, price) {
             var priceEl = document.getElementById("price-" + code);
             if (priceEl && price) {
                 priceEl.textContent = price.toFixed(2);
             }
-        }
-
-        // 載入暫存資料
-        function loadCache() {
-            try {
-                var cached = localStorage.getItem(CACHE_KEY);
-                var cachedTime = localStorage.getItem(CACHE_TIME_KEY);
-                if (cached) {
-                    var data = JSON.parse(cached);
-                    for (var code in data) {
-                        updatePrice(code, data[code]);
-                    }
-                    if (cachedTime) {
-                        document.getElementById("update-time").textContent =
-                            "暫存資料：" + cachedTime + "（更新中...）";
-                    }
-                    return true;
-                }
-            } catch (e) {}
-            return false;
-        }
-
-        // 儲存至暫存
-        function saveCache(stockData) {
-            try {
-                var cache = {};
-                for (var i = 0; i < stockData.length; i++) {
-                    var s = stockData[i];
-                    if (s.code && s.price) {
-                        cache[s.code] = s.price;
-                    }
-                }
-                localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-                localStorage.setItem(CACHE_TIME_KEY, new Date().toLocaleString("zh-TW"));
-            } catch (e) {}
         }
 
         async function fetchStockData() {
@@ -302,7 +265,6 @@
                                 updatePrice(s.code, s.price);
                             }
                         }
-                        saveCache(result.data);
                         statusEl.style.display = "none";
                         var now = new Date();
                         document.getElementById("update-time").textContent =
@@ -318,8 +280,6 @@
             statusEl.textContent = "無法取得股價資料";
         }
 
-        // 先顯示暫存，再抓新資料
-        loadCache();
         fetchStockData();
     </script>
 </body>
