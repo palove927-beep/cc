@@ -67,7 +67,7 @@
     <nav><a href="/cc/">← 首頁</a></nav>
     <h1>股票即時報價</h1>
     <p class="subtitle">資料來源：台灣證券交易所 (TWSE)</p>
-    <p class="note">* 興櫃股票不支援即時報價 API</p>
+    <p class="note">* 興櫃股票透過 Fugle API 取得報價</p>
 
     <table class="stock-table">
         <tr><th>編號</th><th>類別</th><th>股票</th><th>代號</th><th>現價</th></tr>
@@ -96,7 +96,7 @@
         <tr><td>D4</td><td>半導體耗材</td><td>環球晶</td><td>6488</td><td id="price-6488" class="change-cell">-</td></tr>
         <!-- 半導體廠務 -->
         <tr class="category-row"><td colspan="5">半導體廠務</td></tr>
-        <tr><td>E5</td><td>半導體廠務</td><td>和淞 *</td><td>6826</td><td class="emerging">興櫃</td></tr>
+        <tr><td>E5</td><td>半導體廠務</td><td>和淞 *</td><td>6826</td><td id="price-6826" class="change-cell">-</td></tr>
         <!-- 半導體設備 -->
         <tr class="category-row"><td colspan="5">半導體設備</td></tr>
         <tr><td>F1</td><td>半導體設備</td><td>志聖</td><td>2467</td><td id="price-2467" class="change-cell">-</td></tr>
@@ -106,8 +106,8 @@
         <tr><td>F5</td><td>半導體設備</td><td>迅得</td><td>6438</td><td id="price-6438" class="change-cell">-</td></tr>
         <tr><td>F6</td><td>半導體設備</td><td>群翊</td><td>6664</td><td id="price-6664" class="change-cell">-</td></tr>
         <tr><td>F7</td><td>半導體設備</td><td>天虹</td><td>6937</td><td id="price-6937" class="change-cell">-</td></tr>
-        <tr><td>F8</td><td>半導體設備</td><td>倍利科 *</td><td>7822</td><td class="emerging">興櫃</td></tr>
-        <tr><td>F9</td><td>半導體設備</td><td>政美應用 *</td><td>7853</td><td class="emerging">興櫃</td></tr>
+        <tr><td>F8</td><td>半導體設備</td><td>倍利科 *</td><td>7822</td><td id="price-7822" class="change-cell">-</td></tr>
+        <tr><td>F9</td><td>半導體設備</td><td>政美應用 *</td><td>7853</td><td id="price-7853" class="change-cell">-</td></tr>
         <tr><td>F10</td><td>半導體設備</td><td>鈦昇</td><td>8027</td><td id="price-8027" class="change-cell">-</td></tr>
         <!-- III-V族 -->
         <tr class="category-row"><td colspan="5">III-V族</td></tr>
@@ -196,7 +196,6 @@
     <div class="update-time" id="update-time"></div>
 
     <script>
-        // 排除興櫃股票 (6826, 7822, 7853)
         var STOCKS = [
             // IC設計
             "2379", "2454", "3034", "5274",
@@ -206,8 +205,10 @@
             "3711", "6239", "6257", "3587",
             // 半導體耗材
             "1560", "1727", "3680", "6488",
-            // 半導體設備 (排除興櫃: 7822, 7853)
-            "2467", "3131", "3455", "3563", "6438", "6664", "6937", "8027",
+            // 半導體廠務 (興櫃)
+            "6826",
+            // 半導體設備 (含興櫃: 7822, 7853)
+            "2467", "3131", "3455", "3563", "6438", "6664", "6937", "7822", "7853", "8027",
             // III-V族
             "2455", "3081", "3105", "8086",
             // 記憶體
