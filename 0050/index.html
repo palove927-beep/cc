@@ -58,16 +58,16 @@
             display: none;
         }
         .result.show { display: block; }
-        .result-row {
+        .price-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
+            padding: 10px 0;
+            font-size: 16px;
             border-bottom: 1px solid #eee;
-            font-size: 14px;
         }
-        .result-row:last-child { border-bottom: none; }
-        .result-row .label { color: #666; }
-        .result-row .value { font-weight: 600; }
+        .price-row:last-child { border-bottom: none; }
+        .price-row .date { color: #666; }
+        .price-row .price { font-weight: 600; font-family: monospace; }
         .change-positive { color: #e53935; }
         .change-negative { color: #43a047; }
         .change-big {
@@ -113,21 +113,13 @@
 
         <div class="result" id="result">
             <div class="change-big" id="change-pct">--</div>
-            <div class="result-row">
-                <span class="label">買進日期</span>
-                <span class="value" id="res-buy-date">--</span>
+            <div class="price-row">
+                <span class="date" id="res-buy-date">--</span>
+                <span class="price" id="res-buy-price">--</span>
             </div>
-            <div class="result-row">
-                <span class="label">買進價格</span>
-                <span class="value" id="res-buy-price">--</span>
-            </div>
-            <div class="result-row">
-                <span class="label">今日價格</span>
-                <span class="value" id="res-today-price">--</span>
-            </div>
-            <div class="result-row">
-                <span class="label">價差</span>
-                <span class="value" id="res-diff">--</span>
+            <div class="price-row">
+                <span class="date" id="res-today-date">--</span>
+                <span class="price" id="res-today-price">--</span>
             </div>
         </div>
     </div>
@@ -200,13 +192,18 @@
                 var changeClass = isPositive ? "change-positive" : "change-negative";
                 var sign = isPositive ? "+" : "";
 
+                // 今日日期
+                var now = new Date();
+                var todayStr = now.getFullYear() + "-" +
+                    String(now.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(now.getDate()).padStart(2, "0");
+
                 document.getElementById("change-pct").textContent = sign + changePct + "%";
                 document.getElementById("change-pct").className = "change-big " + changeClass;
                 document.getElementById("res-buy-date").textContent = histData.date || buyDateInput;
                 document.getElementById("res-buy-price").textContent = buyPrice.toFixed(2);
+                document.getElementById("res-today-date").textContent = todayStr;
                 document.getElementById("res-today-price").textContent = todayPrice.toFixed(2);
-                document.getElementById("res-diff").textContent = sign + diff.toFixed(2);
-                document.getElementById("res-diff").className = "value " + changeClass;
 
                 resultEl.classList.add("show");
 
