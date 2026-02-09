@@ -138,6 +138,8 @@
     <div class="controls">
         <label>買進日</label>
         <input type="date" id="buy-date" value="2026-01-02">
+        <label>計算日</label>
+        <input type="date" id="end-date">
         <div class="preset-btns">
             <button class="preset-btn" onclick="setDaysAgo(7)">7日</button>
             <button class="preset-btn" onclick="setDaysAgo(14)">14日</button>
@@ -145,8 +147,6 @@
             <button class="preset-btn" onclick="setDaysAgo(90)">90日</button>
             <button class="preset-btn" onclick="setDaysAgo(365)">365日</button>
         </div>
-        <label>計算日</label>
-        <input type="date" id="end-date">
         <button class="calc-btn" id="calc-btn" onclick="calculateAll()">計算</button>
     </div>
 
