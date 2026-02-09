@@ -158,32 +158,37 @@
             resultEl.classList.remove("show");
 
             try {
-                // 取得買進日期的歷史價格和今日價格
+                // 取得買進日期和最新收盤價
                 var dateStr = buyDateInput.replace(/-/g, "");
-                var [histResp, todayResp] = await Promise.all([
+                var now = new Date();
+                var todayDateStr = now.getFullYear().toString() +
+                    String(now.getMonth() + 1).padStart(2, "0") +
+                    String(now.getDate()).padStart(2, "0");
+
+                var [histResp, latestResp] = await Promise.all([
                     fetch(WORKER_URL + "/api/history?code=0050&date=" + dateStr),
-                    fetch(WORKER_URL + "/api/stock?code=0050")
+                    fetch(WORKER_URL + "/api/history?code=0050&date=" + todayDateStr)
                 ]);
 
-                if (!histResp.ok || !todayResp.ok) {
+                if (!histResp.ok || !latestResp.ok) {
                     throw new Error("API 請求失敗");
                 }
 
                 var histData = await histResp.json();
-                var todayData = await todayResp.json();
+                var latestData = await latestResp.json();
 
                 if (histData.error) {
                     throw new Error(histData.error);
                 }
                 if (!histData.price) {
-                    throw new Error("無法取得該日期的收盤價，可能為假日");
+                    throw new Error("無法取得該日期的收盤價");
                 }
-                if (!todayData.data || !todayData.data[0] || !todayData.data[0].price) {
-                    throw new Error("無法取得今日價格");
+                if (latestData.error || !latestData.price) {
+                    throw new Error("無法取得最新收盤價");
                 }
 
                 var buyPrice = histData.price;
-                var todayPrice = todayData.data[0].price;
+                var todayPrice = latestData.price;
                 var diff = todayPrice - buyPrice;
                 var changePct = ((diff / buyPrice) * 100).toFixed(2);
 
@@ -192,17 +197,11 @@
                 var changeClass = isPositive ? "change-positive" : "change-negative";
                 var sign = isPositive ? "+" : "";
 
-                // 今日日期
-                var now = new Date();
-                var todayStr = now.getFullYear() + "-" +
-                    String(now.getMonth() + 1).padStart(2, "0") + "-" +
-                    String(now.getDate()).padStart(2, "0");
-
                 document.getElementById("change-pct").textContent = sign + changePct + "%";
                 document.getElementById("change-pct").className = "change-big " + changeClass;
                 document.getElementById("res-buy-date").textContent = histData.date || buyDateInput;
                 document.getElementById("res-buy-price").textContent = buyPrice.toFixed(2);
-                document.getElementById("res-today-date").textContent = todayStr;
+                document.getElementById("res-today-date").textContent = latestData.date;
                 document.getElementById("res-today-price").textContent = todayPrice.toFixed(2);
 
                 resultEl.classList.add("show");
