@@ -48,6 +48,12 @@
             font-weight: 600;
             font-size: 16px;
         }
+        .stock-label {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+            min-height: 18px;
+        }
         .calc-btn {
             width: 100%;
             padding: 8px 16px;
@@ -125,6 +131,7 @@
             <div class="form-group">
                 <label>股票代號</label>
                 <input type="text" class="stock-code" id="code-0" value="0050" placeholder="如 0050">
+                <div class="stock-label" id="stock-label-0"></div>
             </div>
             <div class="form-group">
                 <label>買進日期</label>
@@ -150,6 +157,7 @@
             <div class="form-group">
                 <label>股票代號</label>
                 <input type="text" class="stock-code" id="code-1" value="2317" placeholder="如 2317">
+                <div class="stock-label" id="stock-label-1"></div>
             </div>
             <div class="form-group">
                 <label>買進日期</label>
@@ -175,6 +183,7 @@
             <div class="form-group">
                 <label>股票代號</label>
                 <input type="text" class="stock-code" id="code-2" value="2330" placeholder="如 2330">
+                <div class="stock-label" id="stock-label-2"></div>
             </div>
             <div class="form-group">
                 <label>買進日期</label>
@@ -200,6 +209,7 @@
             <div class="form-group">
                 <label>股票代號</label>
                 <input type="text" class="stock-code" id="code-3" value="2454" placeholder="如 2454">
+                <div class="stock-label" id="stock-label-3"></div>
             </div>
             <div class="form-group">
                 <label>買進日期</label>
@@ -280,9 +290,10 @@
                     String(now.getMonth() + 1).padStart(2, "0") +
                     String(now.getDate()).padStart(2, "0");
 
-                var [histResp, latestResp] = await Promise.all([
+                var [histResp, latestResp, stockResp] = await Promise.all([
                     fetch(WORKER_URL + "/api/history?code=" + code + "&date=" + dateStr),
-                    fetch(WORKER_URL + "/api/history?code=" + code + "&date=" + todayDateStr)
+                    fetch(WORKER_URL + "/api/history?code=" + code + "&date=" + todayDateStr),
+                    fetch(WORKER_URL + "/api/stock?code=" + code)
                 ]);
 
                 if (!histResp.ok || !latestResp.ok) {
@@ -291,6 +302,14 @@
 
                 var histData = await histResp.json();
                 var latestData = await latestResp.json();
+                var stockData = await stockResp.json();
+
+                // 更新股票名稱
+                var stockName = "";
+                if (stockData.data && stockData.data[0]) {
+                    stockName = stockData.data[0].name || "";
+                }
+                document.getElementById("stock-label-" + idx).textContent = stockName;
 
                 if (histData.error) {
                     throw new Error(histData.error);
