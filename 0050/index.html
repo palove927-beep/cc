@@ -41,14 +41,20 @@
         .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; }
         .preset-btn {
             padding: 6px 12px;
-            background: #e8f4fd;
-            color: #0366d6;
-            border: 1px solid #0366d6;
+            background: #fff;
+            color: #666;
+            border: 1px solid #ddd;
             border-radius: 4px;
             cursor: pointer;
             font-size: 13px;
         }
-        .preset-btn:hover { background: #d0e8f9; }
+        .preset-btn:hover { background: #f5f5f5; }
+        .preset-btn.active {
+            background: #0366d6;
+            color: #fff;
+            border-color: #0366d6;
+        }
+        .preset-btn.active:hover { background: #0256b9; }
         .calc-btn {
             padding: 8px 20px;
             background: #24292e;
@@ -141,11 +147,11 @@
         <label>計算日</label>
         <input type="date" id="end-date">
         <div class="preset-btns">
-            <button class="preset-btn" onclick="setDaysAgo(7)">7日</button>
-            <button class="preset-btn" onclick="setDaysAgo(14)">14日</button>
-            <button class="preset-btn" onclick="setDaysAgo(30)">30日</button>
-            <button class="preset-btn" onclick="setDaysAgo(90)">90日</button>
-            <button class="preset-btn" onclick="setDaysAgo(365)">365日</button>
+            <button class="preset-btn" data-days="7" onclick="setDaysAgo(7)">7日</button>
+            <button class="preset-btn" data-days="14" onclick="setDaysAgo(14)">14日</button>
+            <button class="preset-btn" data-days="30" onclick="setDaysAgo(30)">30日</button>
+            <button class="preset-btn" data-days="90" onclick="setDaysAgo(90)">90日</button>
+            <button class="preset-btn" data-days="365" onclick="setDaysAgo(365)">365日</button>
         </div>
         <button class="calc-btn" id="calc-btn" onclick="calculateAll()">計算</button>
     </div>
@@ -245,14 +251,36 @@
         })();
 
         function setDaysAgo(days) {
-            var date = new Date();
-            date.setDate(date.getDate() - days);
-            var dateStr = date.getFullYear() + "-" +
-                String(date.getMonth() + 1).padStart(2, "0") + "-" +
-                String(date.getDate()).padStart(2, "0");
+            var endDate = new Date(document.getElementById("end-date").value);
+            var buyDate = new Date(endDate);
+            buyDate.setDate(buyDate.getDate() - days);
+            var dateStr = buyDate.getFullYear() + "-" +
+                String(buyDate.getMonth() + 1).padStart(2, "0") + "-" +
+                String(buyDate.getDate()).padStart(2, "0");
             document.getElementById("buy-date").value = dateStr;
+            updatePresetButtons();
             calculateAll();
         }
+
+        function updatePresetButtons() {
+            var buyDate = new Date(document.getElementById("buy-date").value);
+            var endDate = new Date(document.getElementById("end-date").value);
+            var diffDays = Math.round((endDate - buyDate) / (1000 * 60 * 60 * 24));
+
+            var btns = document.querySelectorAll(".preset-btn");
+            btns.forEach(function(btn) {
+                var days = parseInt(btn.getAttribute("data-days"));
+                if (days === diffDays) {
+                    btn.classList.add("active");
+                } else {
+                    btn.classList.remove("active");
+                }
+            });
+        }
+
+        // 日期變更時更新按鈕狀態
+        document.getElementById("buy-date").addEventListener("change", updatePresetButtons);
+        document.getElementById("end-date").addEventListener("change", updatePresetButtons);
 
         async function calculateAll() {
             var calcBtn = document.getElementById("calc-btn");
