@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0050 漲跌幅追蹤</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+        nav { margin-bottom: 24px; }
+        nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
+        nav a:hover { text-decoration: underline; }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .calc-btn {
+            padding: 10px 20px;
+            background: #24292e;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .calc-btn:hover { background: #444; }
+        .calc-btn:disabled { background: #999; cursor: not-allowed; }
+        .result {
+            margin-top: 24px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .result-row:last-child { border-bottom: none; }
+        .result-row .label { color: #666; }
+        .result-row .value { font-weight: 600; }
+        .change-positive { color: #e53935; }
+        .change-negative { color: #43a047; }
+        .change-big {
+            font-size: 28px;
+            text-align: center;
+            padding: 16px 0;
+            font-weight: bold;
+        }
+        .loading { color: #999; font-size: 14px; }
+        .error { color: #e53935; font-size: 14px; margin-top: 12px; }
+        .preset-btns { margin-bottom: 16px; }
+        .preset-btn {
+            padding: 6px 12px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            background: #e8f4fd;
+            color: #0366d6;
+            border: 1px solid #0366d6;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .preset-btn:hover { background: #d0e8f9; }
+    </style>
+</head>
+<body>
+    <nav><a href="/cc/">&larr; 首頁</a></nav>
+    <h1>0050 漲跌幅追蹤</h1>
+    <p class="subtitle">元大台灣50 (0050.TW) 投資報酬率計算</p>
+
+    <div class="card">
+        <div class="preset-btns">
+            <button class="preset-btn" onclick="setPresetDate('2026-01-02')">1/2 買進</button>
+            <button class="preset-btn" onclick="setPresetDate('2026-01-06')">1/6 買進</button>
+            <button class="preset-btn" onclick="setPresetDate('2026-02-03')">2/3 買進</button>
+        </div>
+        <div class="form-group">
+            <label for="buy-date">買進日期</label>
+            <input type="date" id="buy-date" value="2026-01-02">
+        </div>
+        <button class="calc-btn" id="calc-btn" onclick="calculate()">計算漲跌幅</button>
+        <div id="error-msg" class="error" style="display:none;"></div>
+
+        <div class="result" id="result">
+            <div class="change-big" id="change-pct">--</div>
+            <div class="result-row">
+                <span class="label">買進日期</span>
+                <span class="value" id="res-buy-date">--</span>
+            </div>
+            <div class="result-row">
+                <span class="label">買進價格</span>
+                <span class="value" id="res-buy-price">--</span>
+            </div>
+            <div class="result-row">
+                <span class="label">今日價格</span>
+                <span class="value" id="res-today-price">--</span>
+            </div>
+            <div class="result-row">
+                <span class="label">價差</span>
+                <span class="value" id="res-diff">--</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var WORKER_URL = "https://cc.palove927.workers.dev";
+
+        function setPresetDate(dateStr) {
+            document.getElementById("buy-date").value = dateStr;
+            calculate();
+        }
+
+        async function calculate() {
+            var buyDateInput = document.getElementById("buy-date").value;
+            var calcBtn = document.getElementById("calc-btn");
+            var errorEl = document.getElementById("error-msg");
+            var resultEl = document.getElementById("result");
+
+            if (!buyDateInput) {
+                showError("請選擇買進日期");
+                return;
+            }
+
+            // 檢查日期是否為未來
+            var buyDate = new Date(buyDateInput);
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (buyDate > today) {
+                showError("買進日期不能是未來");
+                return;
+            }
+
+            calcBtn.disabled = true;
+            calcBtn.textContent = "計算中...";
+            errorEl.style.display = "none";
+            resultEl.classList.remove("show");
+
+            try {
+                // 取得買進日期的歷史價格和今日價格
+                var dateStr = buyDateInput.replace(/-/g, "");
+                var [histResp, todayResp] = await Promise.all([
+                    fetch(WORKER_URL + "/api/history?code=0050&date=" + dateStr),
+                    fetch(WORKER_URL + "/api/stock?code=0050")
+                ]);
+
+                if (!histResp.ok || !todayResp.ok) {
+                    throw new Error("API 請求失敗");
+                }
+
+                var histData = await histResp.json();
+                var todayData = await todayResp.json();
+
+                if (histData.error) {
+                    throw new Error(histData.error);
+                }
+                if (!histData.price) {
+                    throw new Error("無法取得該日期的收盤價，可能為假日");
+                }
+                if (!todayData.data || !todayData.data[0] || !todayData.data[0].price) {
+                    throw new Error("無法取得今日價格");
+                }
+
+                var buyPrice = histData.price;
+                var todayPrice = todayData.data[0].price;
+                var diff = todayPrice - buyPrice;
+                var changePct = ((diff / buyPrice) * 100).toFixed(2);
+
+                // 顯示結果
+                var isPositive = diff >= 0;
+                var changeClass = isPositive ? "change-positive" : "change-negative";
+                var sign = isPositive ? "+" : "";
+
+                document.getElementById("change-pct").textContent = sign + changePct + "%";
+                document.getElementById("change-pct").className = "change-big " + changeClass;
+                document.getElementById("res-buy-date").textContent = histData.date || buyDateInput;
+                document.getElementById("res-buy-price").textContent = buyPrice.toFixed(2);
+                document.getElementById("res-today-price").textContent = todayPrice.toFixed(2);
+                document.getElementById("res-diff").textContent = sign + diff.toFixed(2);
+                document.getElementById("res-diff").className = "value " + changeClass;
+
+                resultEl.classList.add("show");
+
+            } catch (e) {
+                showError(e.message || "無法計算漲跌幅");
+            } finally {
+                calcBtn.disabled = false;
+                calcBtn.textContent = "計算漲跌幅";
+            }
+        }
+
+        function showError(msg) {
+            var errorEl = document.getElementById("error-msg");
+            errorEl.textContent = msg;
+            errorEl.style.display = "block";
+        }
+    </script>
+</body>
+</html>

@@ -33,12 +33,112 @@ export default {
       return corsResponse(await handleStock(url, env));
     }
 
+    if (url.pathname === "/api/history") {
+      return corsResponse(await handleHistory(url));
+    }
+
     return corsResponse(new Response(
       JSON.stringify({ error: "請使用 /api/stock?code=2330" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
     ));
   }
 };
+
+/**
+ * 處理歷史價格查詢
+ * 用法：/api/history?code=0050&date=20260102
+ */
+async function handleHistory(url) {
+  var code = url.searchParams.get("code");
+  var dateParam = url.searchParams.get("date");
+
+  if (!code) {
+    return jsonResponse({ error: "請提供 code 參數" }, 400);
+  }
+  if (!dateParam || dateParam.length !== 8) {
+    return jsonResponse({ error: "請提供 date 參數，格式為 YYYYMMDD" }, 400);
+  }
+
+  var year = dateParam.substring(0, 4);
+  var month = dateParam.substring(4, 6);
+  var day = dateParam.substring(6, 8);
+  var targetDate = year + "/" + month + "/" + day;
+
+  // 查詢 TWSE 歷史資料（該月份的每日成交資料）
+  var twseUrl = "https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=" + dateParam + "&stockNo=" + code;
+
+  try {
+    var resp = await fetch(twseUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+
+    if (!resp.ok) {
+      return jsonResponse({ error: "無法取得歷史資料" }, 502);
+    }
+
+    var data = await resp.json();
+
+    if (!data || data.stat !== "OK" || !data.data || data.data.length === 0) {
+      // 嘗試 OTC (上櫃) API
+      var otcUrl = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php?l=zh-tw&d=" +
+        (parseInt(year) - 1911) + "/" + month + "&stkno=" + code;
+
+      var otcResp = await fetch(otcUrl, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+
+      if (otcResp.ok) {
+        var otcData = await otcResp.json();
+        if (otcData && otcData.aaData && otcData.aaData.length > 0) {
+          var rocDate = (parseInt(year) - 1911) + "/" + month + "/" + day;
+          for (var i = 0; i < otcData.aaData.length; i++) {
+            var row = otcData.aaData[i];
+            if (row[0] === rocDate) {
+              var closePrice = parseFloat(row[6].replace(/,/g, ""));
+              if (!isNaN(closePrice)) {
+                return jsonResponse({
+                  code: code,
+                  date: year + "-" + month + "-" + day,
+                  price: closePrice
+                });
+              }
+            }
+          }
+        }
+      }
+
+      return jsonResponse({ error: "找不到該日期的交易資料，可能為假日或無資料" }, 404);
+    }
+
+    // 在該月份資料中找到指定日期
+    for (var i = 0; i < data.data.length; i++) {
+      var row = data.data[i];
+      // row[0] 是民國年格式的日期 "114/01/02"
+      var parts = row[0].split("/");
+      var rowYear = parseInt(parts[0]) + 1911;
+      var rowMonth = parts[1];
+      var rowDay = parts[2];
+      var rowDate = rowYear + "/" + rowMonth + "/" + rowDay;
+
+      if (rowDate === targetDate) {
+        // row[6] 是收盤價
+        var closePrice = parseFloat(row[6].replace(/,/g, ""));
+        if (!isNaN(closePrice)) {
+          return jsonResponse({
+            code: code,
+            date: year + "-" + month + "-" + day,
+            price: closePrice
+          });
+        }
+      }
+    }
+
+    return jsonResponse({ error: "找不到該日期的交易資料，可能為假日" }, 404);
+
+  } catch (e) {
+    return jsonResponse({ error: "查詢歷史資料失敗: " + e.message }, 500);
+  }
+}
 
 async function handleStock(url, env) {
   var codeParam = url.searchParams.get("code");
