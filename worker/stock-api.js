@@ -47,6 +47,7 @@ export default {
 /**
  * 處理歷史價格查詢
  * 用法：/api/history?code=0050&date=20260102
+ * 如果指定日期為假日，會自動找尋上一個交易日的收盤價
  */
 async function handleHistory(url) {
   var code = url.searchParams.get("code");
@@ -59,85 +60,150 @@ async function handleHistory(url) {
     return jsonResponse({ error: "請提供 date 參數，格式為 YYYYMMDD" }, 400);
   }
 
-  var year = dateParam.substring(0, 4);
-  var month = dateParam.substring(4, 6);
-  var day = dateParam.substring(6, 8);
-  var targetDate = year + "/" + month + "/" + day;
+  var year = parseInt(dateParam.substring(0, 4));
+  var month = parseInt(dateParam.substring(4, 6));
+  var day = parseInt(dateParam.substring(6, 8));
+  var targetDateNum = year * 10000 + month * 100 + day;
 
-  // 查詢 TWSE 歷史資料（該月份的每日成交資料）
-  var twseUrl = "https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=" + dateParam + "&stockNo=" + code;
+  // 最多往前查 3 個月
+  for (var monthOffset = 0; monthOffset < 3; monthOffset++) {
+    var queryYear = year;
+    var queryMonth = month - monthOffset;
 
-  try {
-    var resp = await fetch(twseUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
-
-    if (!resp.ok) {
-      return jsonResponse({ error: "無法取得歷史資料" }, 502);
+    // 處理跨年
+    while (queryMonth < 1) {
+      queryMonth += 12;
+      queryYear -= 1;
     }
 
-    var data = await resp.json();
+    var queryDate = queryYear.toString() +
+      (queryMonth < 10 ? "0" : "") + queryMonth + "01";
 
-    if (!data || data.stat !== "OK" || !data.data || data.data.length === 0) {
-      // 嘗試 OTC (上櫃) API
-      var otcUrl = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php?l=zh-tw&d=" +
-        (parseInt(year) - 1911) + "/" + month + "&stkno=" + code;
+    // 查詢 TWSE 歷史資料（該月份的每日成交資料）
+    var twseUrl = "https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=" + queryDate + "&stockNo=" + code;
 
+    try {
+      var resp = await fetch(twseUrl, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+
+      if (!resp.ok) continue;
+
+      var data = await resp.json();
+
+      if (data && data.stat === "OK" && data.data && data.data.length > 0) {
+        // 找到小於等於目標日期的最近交易日
+        var closestRow = null;
+        var closestDateNum = 0;
+
+        for (var i = 0; i < data.data.length; i++) {
+          var row = data.data[i];
+          // row[0] 是民國年格式的日期 "114/01/02"
+          var parts = row[0].split("/");
+          var rowYear = parseInt(parts[0]) + 1911;
+          var rowMonth = parseInt(parts[1]);
+          var rowDay = parseInt(parts[2]);
+          var rowDateNum = rowYear * 10000 + rowMonth * 100 + rowDay;
+
+          // 找小於等於目標日期的最大日期
+          if (rowDateNum <= targetDateNum && rowDateNum > closestDateNum) {
+            closestDateNum = rowDateNum;
+            closestRow = row;
+          }
+        }
+
+        if (closestRow) {
+          var closePrice = parseFloat(closestRow[6].replace(/,/g, ""));
+          if (!isNaN(closePrice)) {
+            var foundYear = Math.floor(closestDateNum / 10000);
+            var foundMonth = Math.floor((closestDateNum % 10000) / 100);
+            var foundDay = closestDateNum % 100;
+            return jsonResponse({
+              code: code,
+              date: foundYear + "-" + (foundMonth < 10 ? "0" : "") + foundMonth + "-" + (foundDay < 10 ? "0" : "") + foundDay,
+              price: closePrice
+            });
+          }
+        }
+      } else if (monthOffset === 0) {
+        // 嘗試 OTC (上櫃) API
+        var result = await fetchOTCHistory(code, year, month, day, targetDateNum);
+        if (result) return jsonResponse(result);
+      }
+
+    } catch (e) {
+      // 繼續嘗試下一個月
+    }
+  }
+
+  return jsonResponse({ error: "找不到該日期之前的交易資料" }, 404);
+}
+
+/**
+ * 查詢上櫃股票歷史價格
+ */
+async function fetchOTCHistory(code, year, month, day, targetDateNum) {
+  // 最多往前查 3 個月
+  for (var monthOffset = 0; monthOffset < 3; monthOffset++) {
+    var queryYear = year;
+    var queryMonth = month - monthOffset;
+
+    while (queryMonth < 1) {
+      queryMonth += 12;
+      queryYear -= 1;
+    }
+
+    var otcUrl = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php?l=zh-tw&d=" +
+      (queryYear - 1911) + "/" + (queryMonth < 10 ? "0" : "") + queryMonth + "&stkno=" + code;
+
+    try {
       var otcResp = await fetch(otcUrl, {
         headers: { "User-Agent": "Mozilla/5.0" }
       });
 
-      if (otcResp.ok) {
-        var otcData = await otcResp.json();
-        if (otcData && otcData.aaData && otcData.aaData.length > 0) {
-          var rocDate = (parseInt(year) - 1911) + "/" + month + "/" + day;
-          for (var i = 0; i < otcData.aaData.length; i++) {
-            var row = otcData.aaData[i];
-            if (row[0] === rocDate) {
-              var closePrice = parseFloat(row[6].replace(/,/g, ""));
-              if (!isNaN(closePrice)) {
-                return jsonResponse({
-                  code: code,
-                  date: year + "-" + month + "-" + day,
-                  price: closePrice
-                });
-              }
-            }
+      if (!otcResp.ok) continue;
+
+      var otcData = await otcResp.json();
+
+      if (otcData && otcData.aaData && otcData.aaData.length > 0) {
+        var closestRow = null;
+        var closestDateNum = 0;
+
+        for (var i = 0; i < otcData.aaData.length; i++) {
+          var row = otcData.aaData[i];
+          // row[0] 是民國年格式 "114/01/02"
+          var parts = row[0].split("/");
+          var rowYear = parseInt(parts[0]) + 1911;
+          var rowMonth = parseInt(parts[1]);
+          var rowDay = parseInt(parts[2]);
+          var rowDateNum = rowYear * 10000 + rowMonth * 100 + rowDay;
+
+          if (rowDateNum <= targetDateNum && rowDateNum > closestDateNum) {
+            closestDateNum = rowDateNum;
+            closestRow = row;
+          }
+        }
+
+        if (closestRow) {
+          var closePrice = parseFloat(closestRow[6].replace(/,/g, ""));
+          if (!isNaN(closePrice)) {
+            var foundYear = Math.floor(closestDateNum / 10000);
+            var foundMonth = Math.floor((closestDateNum % 10000) / 100);
+            var foundDay = closestDateNum % 100;
+            return {
+              code: code,
+              date: foundYear + "-" + (foundMonth < 10 ? "0" : "") + foundMonth + "-" + (foundDay < 10 ? "0" : "") + foundDay,
+              price: closePrice
+            };
           }
         }
       }
-
-      return jsonResponse({ error: "找不到該日期的交易資料，可能為假日或無資料" }, 404);
+    } catch (e) {
+      // 繼續嘗試
     }
-
-    // 在該月份資料中找到指定日期
-    for (var i = 0; i < data.data.length; i++) {
-      var row = data.data[i];
-      // row[0] 是民國年格式的日期 "114/01/02"
-      var parts = row[0].split("/");
-      var rowYear = parseInt(parts[0]) + 1911;
-      var rowMonth = parts[1];
-      var rowDay = parts[2];
-      var rowDate = rowYear + "/" + rowMonth + "/" + rowDay;
-
-      if (rowDate === targetDate) {
-        // row[6] 是收盤價
-        var closePrice = parseFloat(row[6].replace(/,/g, ""));
-        if (!isNaN(closePrice)) {
-          return jsonResponse({
-            code: code,
-            date: year + "-" + month + "-" + day,
-            price: closePrice
-          });
-        }
-      }
-    }
-
-    return jsonResponse({ error: "找不到該日期的交易資料，可能為假日" }, 404);
-
-  } catch (e) {
-    return jsonResponse({ error: "查詢歷史資料失敗: " + e.message }, 500);
   }
+
+  return null;
 }
 
 async function handleStock(url, env) {
