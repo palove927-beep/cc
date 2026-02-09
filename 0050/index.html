@@ -160,7 +160,7 @@
         <div class="card" id="card-0">
             <div class="form-group">
                 <label>股票代號</label>
-                <input type="text" class="stock-code" id="code-0" value="0050" placeholder="如 0050">
+                <input type="text" class="stock-code" id="code-0" value="0050" placeholder="代號或名稱">
                 <div class="stock-label" id="stock-label-0"></div>
             </div>
             <div id="error-0" class="error" style="display:none;"></div>
@@ -180,7 +180,7 @@
         <div class="card" id="card-1">
             <div class="form-group">
                 <label>股票代號</label>
-                <input type="text" class="stock-code" id="code-1" value="2317" placeholder="如 2317">
+                <input type="text" class="stock-code" id="code-1" value="2317" placeholder="代號或名稱">
                 <div class="stock-label" id="stock-label-1"></div>
             </div>
             <div id="error-1" class="error" style="display:none;"></div>
@@ -200,7 +200,7 @@
         <div class="card" id="card-2">
             <div class="form-group">
                 <label>股票代號</label>
-                <input type="text" class="stock-code" id="code-2" value="2330" placeholder="如 2330">
+                <input type="text" class="stock-code" id="code-2" value="2330" placeholder="代號或名稱">
                 <div class="stock-label" id="stock-label-2"></div>
             </div>
             <div id="error-2" class="error" style="display:none;"></div>
@@ -220,7 +220,7 @@
         <div class="card" id="card-3">
             <div class="form-group">
                 <label>股票代號</label>
-                <input type="text" class="stock-code" id="code-3" value="2454" placeholder="如 2454">
+                <input type="text" class="stock-code" id="code-3" value="2454" placeholder="代號或名稱">
                 <div class="stock-label" id="stock-label-3"></div>
             </div>
             <div id="error-3" class="error" style="display:none;"></div>
@@ -240,6 +240,43 @@
 
     <script>
         var WORKER_URL = "https://cc.palove927.workers.dev";
+
+        // 股票名稱對照表
+        var STOCK_MAP = {
+            "台積電": "2330", "鴻海": "2317", "聯發科": "2454", "台達電": "2308",
+            "中華電": "2412", "富邦金": "2881", "國泰金": "2882", "兆豐金": "2886",
+            "中信金": "2891", "玉山金": "2884", "第一金": "2892", "合庫金": "5880",
+            "元大金": "2885", "台新金": "2887", "永豐金": "2890", "華南金": "2880",
+            "台塑": "1301", "南亞": "1303", "台化": "1326", "台塑化": "6505",
+            "統一": "1216", "大立光": "3008", "廣達": "2382", "和碩": "4938",
+            "仁寶": "2324", "緯創": "3231", "英業達": "2356", "華碩": "2357",
+            "宏碁": "2353", "技嘉": "2376", "微星": "2377", "日月光": "3711",
+            "聯電": "2303", "世界先進": "5347", "力積電": "6770", "南亞科": "2408",
+            "旺宏": "2337", "華邦電": "2344", "瑞昱": "2379", "聯詠": "3034",
+            "矽力": "6415", "群聯": "8299", "祥碩": "5765", "創意": "3443",
+            "智原": "3035", "世芯": "3661", "信驊": "5274", "譜瑞": "4966",
+            "長榮": "2603", "陽明": "2609", "萬海": "2615", "長榮航": "2618",
+            "華航": "2610", "台泥": "1101", "亞泥": "1102", "中鋼": "2002",
+            "台玻": "1802", "遠東新": "1402", "統一超": "2912", "全家": "5903",
+            "寶雅": "5904", "momo": "8454", "富邦媒": "8454",
+            "元大50": "0050", "元大台灣50": "0050", "0050": "0050",
+            "元大高股息": "0056", "0056": "0056",
+            "國泰永續高股息": "00878", "00878": "00878",
+            "元大美債20年": "00679B", "復華台灣科技優息": "00929",
+            "群益台灣精選高息": "00919"
+        };
+
+        // 將輸入轉換為股票代號
+        function toStockCode(input) {
+            if (!input) return "";
+            input = input.trim();
+            // 如果在對照表中找到，返回對應代號
+            if (STOCK_MAP[input]) {
+                return STOCK_MAP[input];
+            }
+            // 否則直接返回輸入（可能已經是代號）
+            return input;
+        }
 
         // 設定計算日預設為今天
         (function() {
@@ -298,7 +335,9 @@
         }
 
         async function calculate(idx) {
-            var code = document.getElementById("code-" + idx).value.trim();
+            var inputEl = document.getElementById("code-" + idx);
+            var input = inputEl.value.trim();
+            var code = toStockCode(input);
             var dateInput = document.getElementById("buy-date").value;
             var errorEl = document.getElementById("error-" + idx);
             var resultEl = document.getElementById("result-" + idx);
@@ -310,6 +349,11 @@
 
             if (!code) {
                 return;
+            }
+
+            // 如果輸入的是名稱，更新為代號
+            if (input !== code) {
+                inputEl.value = code;
             }
 
             try {
