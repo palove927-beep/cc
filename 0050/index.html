@@ -16,7 +16,51 @@
         nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
         nav a:hover { text-decoration: underline; }
         h1 { font-size: 24px; margin-bottom: 8px; }
-        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+        .controls {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .controls label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .controls input[type="date"] {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+        .preset-btn {
+            padding: 6px 12px;
+            background: #e8f4fd;
+            color: #0366d6;
+            border: 1px solid #0366d6;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .preset-btn:hover { background: #d0e8f9; }
+        .calc-btn {
+            padding: 8px 20px;
+            background: #24292e;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: auto;
+        }
+        .calc-btn:hover { background: #444; }
+        .calc-btn:disabled { background: #999; cursor: not-allowed; }
         .cards {
             display: flex;
             gap: 16px;
@@ -49,25 +93,14 @@
             font-size: 16px;
         }
         .stock-label {
-            font-size: 13px;
-            color: #666;
-            margin-top: 4px;
-            min-height: 18px;
+            font-size: 14px;
+            color: #333;
+            margin-top: 6px;
+            font-weight: 500;
+            min-height: 20px;
         }
-        .calc-btn {
-            width: 100%;
-            padding: 8px 16px;
-            background: #24292e;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        .calc-btn:hover { background: #444; }
-        .calc-btn:disabled { background: #999; cursor: not-allowed; }
         .result {
-            margin-top: 16px;
+            margin-top: 12px;
             padding: 16px;
             background: #f8f9fa;
             border-radius: 6px;
@@ -88,29 +121,13 @@
         .change-positive { color: #e53935; }
         .change-negative { color: #43a047; }
         .change-big {
-            font-size: 24px;
+            font-size: 28px;
             text-align: center;
             padding: 12px 0;
             font-weight: bold;
         }
-        .stock-name {
-            text-align: center;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 8px;
-        }
         .error { color: #e53935; font-size: 12px; margin-top: 8px; }
-        .preset-btns { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px; }
-        .preset-btn {
-            padding: 4px 8px;
-            background: #e8f4fd;
-            color: #0366d6;
-            border: 1px solid #0366d6;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-        .preset-btn:hover { background: #d0e8f9; }
+        .loading { color: #999; font-size: 13px; text-align: center; padding: 20px 0; }
     </style>
 </head>
 <body>
@@ -118,12 +135,17 @@
     <h1>股票漲跌幅追蹤</h1>
     <p class="subtitle">比較不同股票的投資報酬率</p>
 
-    <div class="preset-btns">
-        <button class="preset-btn" onclick="setAllDaysAgo(7)">7日</button>
-        <button class="preset-btn" onclick="setAllDaysAgo(14)">14日</button>
-        <button class="preset-btn" onclick="setAllDaysAgo(30)">30日</button>
-        <button class="preset-btn" onclick="setAllDaysAgo(90)">90日</button>
-        <button class="preset-btn" onclick="setAllDaysAgo(365)">365日</button>
+    <div class="controls">
+        <label>買進日期</label>
+        <input type="date" id="buy-date" value="2026-01-02">
+        <div class="preset-btns">
+            <button class="preset-btn" onclick="setDaysAgo(7)">7日</button>
+            <button class="preset-btn" onclick="setDaysAgo(14)">14日</button>
+            <button class="preset-btn" onclick="setDaysAgo(30)">30日</button>
+            <button class="preset-btn" onclick="setDaysAgo(90)">90日</button>
+            <button class="preset-btn" onclick="setDaysAgo(365)">365日</button>
+        </div>
+        <button class="calc-btn" id="calc-btn" onclick="calculateAll()">計算</button>
     </div>
 
     <div class="cards">
@@ -133,14 +155,8 @@
                 <input type="text" class="stock-code" id="code-0" value="0050" placeholder="如 0050">
                 <div class="stock-label" id="stock-label-0"></div>
             </div>
-            <div class="form-group">
-                <label>買進日期</label>
-                <input type="date" id="date-0" value="2026-01-02">
-            </div>
-            <button class="calc-btn" onclick="calculate(0)">計算</button>
             <div id="error-0" class="error" style="display:none;"></div>
             <div class="result" id="result-0">
-                <div class="stock-name" id="name-0">--</div>
                 <div class="change-big" id="change-0">--</div>
                 <div class="price-row">
                     <span class="date" id="buy-date-0">--</span>
@@ -159,14 +175,8 @@
                 <input type="text" class="stock-code" id="code-1" value="2317" placeholder="如 2317">
                 <div class="stock-label" id="stock-label-1"></div>
             </div>
-            <div class="form-group">
-                <label>買進日期</label>
-                <input type="date" id="date-1" value="2026-01-02">
-            </div>
-            <button class="calc-btn" onclick="calculate(1)">計算</button>
             <div id="error-1" class="error" style="display:none;"></div>
             <div class="result" id="result-1">
-                <div class="stock-name" id="name-1">--</div>
                 <div class="change-big" id="change-1">--</div>
                 <div class="price-row">
                     <span class="date" id="buy-date-1">--</span>
@@ -185,14 +195,8 @@
                 <input type="text" class="stock-code" id="code-2" value="2330" placeholder="如 2330">
                 <div class="stock-label" id="stock-label-2"></div>
             </div>
-            <div class="form-group">
-                <label>買進日期</label>
-                <input type="date" id="date-2" value="2026-01-02">
-            </div>
-            <button class="calc-btn" onclick="calculate(2)">計算</button>
             <div id="error-2" class="error" style="display:none;"></div>
             <div class="result" id="result-2">
-                <div class="stock-name" id="name-2">--</div>
                 <div class="change-big" id="change-2">--</div>
                 <div class="price-row">
                     <span class="date" id="buy-date-2">--</span>
@@ -211,14 +215,8 @@
                 <input type="text" class="stock-code" id="code-3" value="2454" placeholder="如 2454">
                 <div class="stock-label" id="stock-label-3"></div>
             </div>
-            <div class="form-group">
-                <label>買進日期</label>
-                <input type="date" id="date-3" value="2026-01-02">
-            </div>
-            <button class="calc-btn" onclick="calculate(3)">計算</button>
             <div id="error-3" class="error" style="display:none;"></div>
             <div class="result" id="result-3">
-                <div class="stock-name" id="name-3">--</div>
                 <div class="change-big" id="change-3">--</div>
                 <div class="price-row">
                     <span class="date" id="buy-date-3">--</span>
@@ -235,53 +233,45 @@
     <script>
         var WORKER_URL = "https://cc.palove927.workers.dev";
 
-        function setAllDaysAgo(days) {
+        function setDaysAgo(days) {
             var date = new Date();
             date.setDate(date.getDate() - days);
             var dateStr = date.getFullYear() + "-" +
                 String(date.getMonth() + 1).padStart(2, "0") + "-" +
                 String(date.getDate()).padStart(2, "0");
-
-            for (var i = 0; i < 4; i++) {
-                document.getElementById("date-" + i).value = dateStr;
-            }
+            document.getElementById("buy-date").value = dateStr;
             calculateAll();
         }
 
-        function calculateAll() {
+        async function calculateAll() {
+            var calcBtn = document.getElementById("calc-btn");
+            calcBtn.disabled = true;
+            calcBtn.textContent = "計算中...";
+
+            var promises = [];
             for (var i = 0; i < 4; i++) {
-                calculate(i);
+                promises.push(calculate(i));
             }
+            await Promise.all(promises);
+
+            calcBtn.disabled = false;
+            calcBtn.textContent = "計算";
         }
 
         async function calculate(idx) {
             var code = document.getElementById("code-" + idx).value.trim();
-            var dateInput = document.getElementById("date-" + idx).value;
+            var dateInput = document.getElementById("buy-date").value;
             var errorEl = document.getElementById("error-" + idx);
             var resultEl = document.getElementById("result-" + idx);
-            var calcBtn = document.getElementById("card-" + idx).querySelector(".calc-btn");
+            var stockLabelEl = document.getElementById("stock-label-" + idx);
 
-            if (!code) {
-                showError(idx, "請輸入股票代號");
-                return;
-            }
-            if (!dateInput) {
-                showError(idx, "請選擇日期");
-                return;
-            }
-
-            var buyDate = new Date(dateInput);
-            var today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (buyDate > today) {
-                showError(idx, "日期不能是未來");
-                return;
-            }
-
-            calcBtn.disabled = true;
-            calcBtn.textContent = "計算中...";
             errorEl.style.display = "none";
             resultEl.classList.remove("show");
+            stockLabelEl.textContent = "";
+
+            if (!code) {
+                return;
+            }
 
             try {
                 var dateStr = dateInput.replace(/-/g, "");
@@ -296,20 +286,14 @@
                     fetch(WORKER_URL + "/api/stock?code=" + code)
                 ]);
 
-                if (!histResp.ok || !latestResp.ok) {
-                    throw new Error("API 請求失敗");
-                }
-
                 var histData = await histResp.json();
                 var latestData = await latestResp.json();
                 var stockData = await stockResp.json();
 
                 // 更新股票名稱
-                var stockName = "";
-                if (stockData.data && stockData.data[0]) {
-                    stockName = stockData.data[0].name || "";
+                if (stockData.data && stockData.data[0] && stockData.data[0].name) {
+                    stockLabelEl.textContent = stockData.data[0].name;
                 }
-                document.getElementById("stock-label-" + idx).textContent = stockName;
 
                 if (histData.error) {
                     throw new Error(histData.error);
@@ -330,7 +314,6 @@
                 var changeClass = isPositive ? "change-positive" : "change-negative";
                 var sign = isPositive ? "+" : "";
 
-                document.getElementById("name-" + idx).textContent = code;
                 document.getElementById("change-" + idx).textContent = sign + changePct + "%";
                 document.getElementById("change-" + idx).className = "change-big " + changeClass;
                 document.getElementById("buy-date-" + idx).textContent = histData.date || dateInput;
@@ -341,17 +324,9 @@
                 resultEl.classList.add("show");
 
             } catch (e) {
-                showError(idx, e.message || "無法計算");
-            } finally {
-                calcBtn.disabled = false;
-                calcBtn.textContent = "計算";
+                errorEl.textContent = e.message || "無法計算";
+                errorEl.style.display = "block";
             }
-        }
-
-        function showError(idx, msg) {
-            var errorEl = document.getElementById("error-" + idx);
-            errorEl.textContent = msg;
-            errorEl.style.display = "block";
         }
     </script>
 </body>
