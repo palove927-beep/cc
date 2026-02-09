@@ -278,13 +278,15 @@
             return input;
         }
 
-        // 設定計算日預設為今天
+        // 設定計算日預設為今天，並自動計算 7 天
         (function() {
             var now = new Date();
             var todayStr = now.getFullYear() + "-" +
                 String(now.getMonth() + 1).padStart(2, "0") + "-" +
                 String(now.getDate()).padStart(2, "0");
             document.getElementById("end-date").value = todayStr;
+            // 頁面載入後自動選擇 7 天並計算
+            setTimeout(function() { setDaysAgo(7); }, 100);
         })();
 
         function setDaysAgo(days) {
