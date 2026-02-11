@@ -19,6 +19,14 @@
 // 興櫃股票清單
 var EMERGING_STOCKS = ["6826", "7822", "7853"];
 
+// 股票分割記錄 (用於調整歷史價格)
+// 0050 在 2024/10/23 進行 1:1 分割，分割前價格需除以 2
+var STOCK_SPLITS = {
+    "0050": [
+        { date: 20241023, ratio: 2 }
+    ]
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -124,10 +132,14 @@ async function handleHistory(url) {
             var foundMonth = Math.floor((closestDateNum % 10000) / 100);
             var foundDay = closestDateNum % 100;
 
+            // 調整股票分割
+            var adjustedPrice = adjustForSplits(code, closestDateNum, closePrice);
+
             return jsonResponse({
               code: code,
               date: foundYear + "-" + (foundMonth < 10 ? "0" : "") + foundMonth + "-" + (foundDay < 10 ? "0" : "") + foundDay,
-              price: closePrice
+              price: adjustedPrice,
+              rawPrice: closePrice !== adjustedPrice ? closePrice : undefined
             });
           }
         }
@@ -197,10 +209,14 @@ async function fetchOTCHistory(code, year, month, day, targetDateNum) {
             var foundMonth = Math.floor((closestDateNum % 10000) / 100);
             var foundDay = closestDateNum % 100;
 
+            // 調整股票分割
+            var adjustedPrice = adjustForSplits(code, closestDateNum, closePrice);
+
             return {
               code: code,
               date: foundYear + "-" + (foundMonth < 10 ? "0" : "") + foundMonth + "-" + (foundDay < 10 ? "0" : "") + foundDay,
-              price: closePrice
+              price: adjustedPrice,
+              rawPrice: closePrice !== adjustedPrice ? closePrice : undefined
             };
           }
         }
@@ -455,6 +471,27 @@ async function handleFugleCandles(url, env) {
   } catch (e) {
     return jsonResponse({ error: "查詢失敗", message: e.message }, 500);
   }
+}
+
+/**
+ * 調整股票分割後的歷史價格
+ * 將分割前的價格調整為等效的分割後價格
+ */
+function adjustForSplits(code, dateNum, price) {
+  var splits = STOCK_SPLITS[code];
+  if (!splits) return price;
+
+  var adjustedPrice = price;
+  for (var i = 0; i < splits.length; i++) {
+    var split = splits[i];
+    // 如果查詢日期在分割日之前，則需要調整價格
+    if (dateNum < split.date) {
+      adjustedPrice = adjustedPrice / split.ratio;
+    }
+  }
+
+  // 四捨五入到小數點後兩位
+  return Math.round(adjustedPrice * 100) / 100;
 }
 
 function jsonResponse(obj, status) {
