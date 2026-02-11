@@ -19,8 +19,10 @@
 // 興櫃股票清單
 var EMERGING_STOCKS = ["6826", "7822", "7853"];
 
-// 使用 FinMind 還原股價的股票清單 (有分割或除權息需要調整的股票)
-var USE_FINMIND_STOCKS = ["0050"];
+// 使用 FinMind 還原股價的股票清單
+// 注意：FinMind 的還原股價是往上調整（乘以分割比例），不適合 0050
+// 0050 改用 TWSE + STOCK_SPLITS 手動調整
+var USE_FINMIND_STOCKS = [];
 
 // 股票分割記錄 (備用，當 FinMind 無法使用時)
 var STOCK_SPLITS = {
