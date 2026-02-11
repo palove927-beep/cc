@@ -15,6 +15,9 @@
         nav { margin-bottom: 24px; }
         nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
         nav a:hover { text-decoration: underline; }
+        .container {
+            max-width: 750px;
+        }
         .header-row {
             display: flex;
             align-items: center;
@@ -99,6 +102,7 @@
     </style>
 </head>
 <body>
+    <div class="container">
     <nav><a href="/cc/">← 首頁</a></nav>
     <div class="header-row">
         <h1>股票即時報價</h1>
@@ -320,5 +324,6 @@
 
         fetchStockData();
     </script>
+    </div>
 </body>
 </html>
