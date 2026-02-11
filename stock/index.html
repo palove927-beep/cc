@@ -15,8 +15,43 @@
         nav { margin-bottom: 24px; }
         nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
         nav a:hover { text-decoration: underline; }
-        h1 { font-size: 24px; margin-bottom: 8px; }
-        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .header-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        h1 { font-size: 24px; margin: 0; }
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #999;
+            color: #fff;
+            font-size: 12px;
+            cursor: help;
+            position: relative;
+        }
+        .help-icon:hover .tooltip {
+            display: block;
+        }
+        .tooltip {
+            display: none;
+            position: absolute;
+            top: 28px;
+            left: 0;
+            background: #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+        .header-spacer { flex: 1; }
         .stock-table {
             width: 100%;
             max-width: 750px;
@@ -65,11 +100,12 @@
 </head>
 <body>
     <nav><a href="/cc/">← 首頁</a></nav>
-    <h1>股票即時報價</h1>
-    <p class="subtitle">資料來源：台灣證券交易所 (TWSE) ｜ * 興櫃股票透過 Fugle API 取得報價</p>
-
-    <button class="refresh-btn" onclick="fetchStockData()">重新整理</button>
-    <div style="margin-bottom: 16px;"></div>
+    <div class="header-row">
+        <h1>股票即時報價</h1>
+        <span class="help-icon">?<span class="tooltip">資料來源：台灣證券交易所 (TWSE)<br>興櫃股票透過 Fugle API 取得報價</span></span>
+        <span class="header-spacer"></span>
+        <button class="refresh-btn" onclick="fetchStockData()">重新整理</button>
+    </div>
 
     <table class="stock-table">
         <tr><th>編號</th><th>類別</th><th>股票</th><th>代號</th><th>現價</th></tr>
