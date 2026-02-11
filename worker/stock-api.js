@@ -46,6 +46,11 @@ export default {
       return corsResponse(await handleHistory(url));
     }
 
+    // 測試 Fugle 歷史價格 API
+    if (url.pathname === "/api/fugle-history") {
+      return corsResponse(await handleFugleHistory(url, env));
+    }
+
     return corsResponse(new Response(
       JSON.stringify({ error: "請使用 /api/stock?code=2330" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
@@ -415,6 +420,59 @@ function getPrice(stock) {
     if (!isNaN(val) && val > 0) return val;
   }
   return null;
+}
+
+/**
+ * 測試 Fugle 歷史價格 API
+ * 用法：/api/fugle-history?code=0050&from=2025-02-01&to=2025-02-11
+ */
+async function handleFugleHistory(url, env) {
+  var code = url.searchParams.get("code");
+  var from = url.searchParams.get("from");
+  var to = url.searchParams.get("to");
+
+  if (!code) {
+    return jsonResponse({ error: "請提供 code 參數" }, 400);
+  }
+  if (!env || !env.FUGLE_API_KEY) {
+    return jsonResponse({ error: "未設定 FUGLE_API_KEY" }, 500);
+  }
+
+  // 預設查詢近 7 天
+  if (!to) {
+    var today = new Date();
+    to = today.toISOString().split("T")[0];
+  }
+  if (!from) {
+    var fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 7);
+    from = fromDate.toISOString().split("T")[0];
+  }
+
+  try {
+    var fugleUrl = "https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/" + code +
+      "?from=" + from + "&to=" + to + "&timeframe=D";
+
+    var resp = await fetch(fugleUrl, {
+      headers: { "X-API-KEY": env.FUGLE_API_KEY }
+    });
+
+    if (!resp.ok) {
+      var errText = await resp.text();
+      return jsonResponse({ error: "Fugle API 錯誤", status: resp.status, detail: errText }, resp.status);
+    }
+
+    var data = await resp.json();
+    return jsonResponse({
+      source: "fugle",
+      code: code,
+      from: from,
+      to: to,
+      data: data
+    });
+  } catch (e) {
+    return jsonResponse({ error: "查詢失敗", message: e.message }, 500);
+  }
 }
 
 /**
