@@ -19,12 +19,7 @@
 // 興櫃股票清單
 var EMERGING_STOCKS = ["6826", "7822", "7853"];
 
-// 使用 FinMind 還原股價的股票清單
-// 注意：FinMind 的還原股價是往上調整（乘以分割比例），不適合 0050
-// 0050 改用 TWSE + STOCK_SPLITS 手動調整
-var USE_FINMIND_STOCKS = [];
-
-// 股票分割記錄 (備用，當 FinMind 無法使用時)
+// 股票分割記錄 (用於調整歷史價格)
 var STOCK_SPLITS = {
     "0050": [
         { date: 20241023, ratio: 2 }  // 2024/10/23 進行 1:1 分割
@@ -49,11 +44,6 @@ export default {
       return corsResponse(await handleHistory(url));
     }
 
-    // 測試 Fugle 歷史價格 API
-    if (url.pathname === "/api/fugle-history") {
-      return corsResponse(await handleFugleHistory(url, env));
-    }
-
     return corsResponse(new Response(
       JSON.stringify({ error: "請使用 /api/stock?code=2330" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
@@ -65,8 +55,7 @@ export default {
  * 處理歷史價格查詢
  * 用法：/api/history?code=0050&date=20260102
  * 如果指定日期為假日，會自動找尋上一個交易日的收盤價
- *
- * 0050 等有分割的股票會使用 FinMind 還原股價 API
+ * 有分割記錄的股票會自動調整價格
  */
 async function handleHistory(url) {
   var code = url.searchParams.get("code");
@@ -83,15 +72,6 @@ async function handleHistory(url) {
   var month = parseInt(dateParam.substring(4, 6));
   var day = parseInt(dateParam.substring(6, 8));
   var targetDateNum = year * 10000 + month * 100 + day;
-
-  // 如果是需要還原股價的股票，優先使用 FinMind
-  if (USE_FINMIND_STOCKS.indexOf(code) !== -1) {
-    var finmindResult = await fetchFinMindHistory(code, year, month, day, targetDateNum);
-    if (finmindResult) {
-      return jsonResponse(finmindResult);
-    }
-    // FinMind 失敗時，繼續使用 TWSE + 手動調整
-  }
 
   // 最多往前查 3 個月
   for (var monthOffset = 0; monthOffset < 3; monthOffset++) {
@@ -170,70 +150,6 @@ async function handleHistory(url) {
   }
 
   return jsonResponse({ error: "找不到該日期之前的交易資料" }, 404);
-}
-
-/**
- * 使用 FinMind API 查詢還原股價
- * 回傳已調整分割和除權息的股價
- */
-async function fetchFinMindHistory(code, year, month, day, targetDateNum) {
-  // 計算查詢範圍：從目標日期往前 3 個月
-  var startDate = new Date(year, month - 4, 1);  // 往前多查一點
-  var endDate = new Date(year, month - 1, day);
-
-  var startStr = startDate.getFullYear() + "-" +
-    String(startDate.getMonth() + 1).padStart(2, "0") + "-01";
-  var endStr = endDate.getFullYear() + "-" +
-    String(endDate.getMonth() + 1).padStart(2, "0") + "-" +
-    String(endDate.getDate()).padStart(2, "0");
-
-  var finmindUrl = "https://api.finmindtrade.com/api/v4/data?" +
-    "dataset=TaiwanStockPriceAdj&data_id=" + code +
-    "&start_date=" + startStr + "&end_date=" + endStr;
-
-  try {
-    var resp = await fetch(finmindUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
-
-    if (!resp.ok) return null;
-
-    var result = await resp.json();
-
-    if (result && result.data && result.data.length > 0) {
-      // 找到小於等於目標日期的最近交易日
-      var closestRow = null;
-      var closestDateNum = 0;
-
-      for (var i = 0; i < result.data.length; i++) {
-        var row = result.data[i];
-        // row.date 格式為 "2024-10-22"
-        var parts = row.date.split("-");
-        var rowYear = parseInt(parts[0]);
-        var rowMonth = parseInt(parts[1]);
-        var rowDay = parseInt(parts[2]);
-        var rowDateNum = rowYear * 10000 + rowMonth * 100 + rowDay;
-
-        if (rowDateNum <= targetDateNum && rowDateNum > closestDateNum) {
-          closestDateNum = rowDateNum;
-          closestRow = row;
-        }
-      }
-
-      if (closestRow && closestRow.close) {
-        return {
-          code: code,
-          date: closestRow.date,
-          price: closestRow.close,
-          source: "finmind"
-        };
-      }
-    }
-  } catch (e) {
-    // FinMind 查詢失敗，回傳 null 讓呼叫端使用備用方案
-  }
-
-  return null;
 }
 
 /**
@@ -498,59 +414,6 @@ function getPrice(stock) {
     if (!isNaN(val) && val > 0) return val;
   }
   return null;
-}
-
-/**
- * 測試 Fugle 歷史價格 API
- * 用法：/api/fugle-history?code=0050&from=2025-02-01&to=2025-02-11
- */
-async function handleFugleHistory(url, env) {
-  var code = url.searchParams.get("code");
-  var from = url.searchParams.get("from");
-  var to = url.searchParams.get("to");
-
-  if (!code) {
-    return jsonResponse({ error: "請提供 code 參數" }, 400);
-  }
-  if (!env || !env.FUGLE_API_KEY) {
-    return jsonResponse({ error: "未設定 FUGLE_API_KEY" }, 500);
-  }
-
-  // 預設查詢近 7 天
-  if (!to) {
-    var today = new Date();
-    to = today.toISOString().split("T")[0];
-  }
-  if (!from) {
-    var fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - 7);
-    from = fromDate.toISOString().split("T")[0];
-  }
-
-  try {
-    var fugleUrl = "https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/" + code +
-      "?from=" + from + "&to=" + to + "&timeframe=D";
-
-    var resp = await fetch(fugleUrl, {
-      headers: { "X-API-KEY": env.FUGLE_API_KEY }
-    });
-
-    if (!resp.ok) {
-      var errText = await resp.text();
-      return jsonResponse({ error: "Fugle API 錯誤", status: resp.status, detail: errText }, resp.status);
-    }
-
-    var data = await resp.json();
-    return jsonResponse({
-      source: "fugle",
-      code: code,
-      from: from,
-      to: to,
-      data: data
-    });
-  } catch (e) {
-    return jsonResponse({ error: "查詢失敗", message: e.message }, 500);
-  }
 }
 
 /**
