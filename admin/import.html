@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批次匯入週報筆記</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { font-size: 24px; margin-bottom: 20px; }
+        .auth-section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .auth-section label { display: block; margin-bottom: 8px; font-weight: 500; }
+        .auth-section input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .date-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        .date-row input { width: 150px; }
+        .notes-list { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .note-item { padding: 16px 20px; border-bottom: 1px solid #eee; }
+        .note-item:last-child { border-bottom: none; }
+        .note-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .note-code { font-weight: 600; font-size: 16px; }
+        .note-name { color: #666; }
+        .note-status { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .status-positive { background: #c8e6c9; color: #2e7d32; }
+        .status-neutral { background: #fff9c4; color: #f57f17; }
+        .status-negative { background: #ffcdd2; color: #c62828; }
+        .note-summary { font-size: 14px; color: #333; margin-bottom: 8px; }
+        .note-content { font-size: 12px; color: #666; background: #f9f9f9; padding: 10px; border-radius: 4px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; display: none; }
+        .note-toggle { font-size: 12px; color: #1976d2; cursor: pointer; margin-bottom: 8px; }
+        .note-toggle:hover { text-decoration: underline; }
+        .note-result { font-size: 12px; margin-top: 8px; padding: 4px 8px; border-radius: 4px; display: none; }
+        .result-success { background: #c8e6c9; color: #2e7d32; display: inline-block; }
+        .result-error { background: #ffcdd2; color: #c62828; display: inline-block; }
+        .btn-import { background: #1976d2; color: #fff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 14px; cursor: pointer; margin-top: 20px; }
+        .btn-import:hover { background: #1565c0; }
+        .btn-import:disabled { background: #ccc; cursor: not-allowed; }
+        .progress { margin-top: 20px; font-size: 14px; color: #666; }
+        nav { margin-bottom: 20px; }
+        nav a { color: #1976d2; text-decoration: none; }
+        nav a:hover { text-decoration: underline; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; }
+        .checkbox-row input[type="checkbox"] { width: 18px; height: 18px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav><a href="/cc/admin/">← 返回管理頁面</a></nav>
+        <h1>批次匯入週報筆記</h1>
+
+        <div class="auth-section">
+            <label>管理員密碼</label>
+            <input type="password" id="adminKey" placeholder="請輸入管理員密碼">
+            <div class="date-row">
+                <label>週報日期：</label>
+                <input type="date" id="reportDate" value="2026-02-08">
+            </div>
+        </div>
+
+        <div class="notes-list" id="notesList"></div>
+
+        <button class="btn-import" id="importBtn" onclick="importAll()">匯入全部筆記</button>
+        <div class="progress" id="progress"></div>
+    </div>
+
+    <script>
+        var WORKER_URL = "https://cc.palove927.workers.dev";
+
+        // 週報資料 - 2026/2/8
+        var notesData = [
+            {
+                code: "2313",
+                name: "華通",
+                status: "positive",
+                summary: "2026年財測EPS達6.64元，低軌道衛星板、伺服器主板需求大幅成長，手機、PC/NB應用維持穩健",
+                content: "2025Q4營收210.16億元，QoQ +4.8%，YoY +6.0%。本季營收較前一季度成長，受惠於低軌道衛星營運商衛星板、地面接收器板，以及美系手機品牌業者新機備貨需求強勁。\n\n展望2026Q1，財測營收區間QoQ -11~-16%，毛利率區間19.0~20.0%，反映農曆春節假期工作天數減少，以及手機市場進入傳統淡季。\n\n展望2026年，財測營收區間YoY +7~13%，毛利率區間20.0~21.0%，HDI、多層板、軟板產能利用率皆接近滿載。\n\n2025年低軌道衛星相關產品營收約150~155億元，2026年營收目標190~195億元。2025年伺服器相關產品營收25~30億元，2026年營收目標50~60億元。\n\n2026年資本支出預算120~150億元，將投入泰國二廠廠房建置與設備採購，預計2026Q3廠房完工、2026Q4設備進駐開始試產。"
+            },
+            {
+                code: "5347",
+                name: "世界先進",
+                status: "positive",
+                summary: "2026年財測EPS 6.20元，產能利用率可望回升至90%以上，新加坡12吋廠預計2027Q1量產",
+                content: "2025Q4營收125.94億元，QoQ +2.0%、YoY +9.0%，毛利率27.5%，EPS 0.93元。本季營收較前一季度成長，晶圓出貨量QoQ -7%，平均銷售單價(以美元計)QoQ +5%，產能利用率約75%。\n\n展望2026Q1，財測營收區間QoQ +4~9%，毛利率區間28.0~30.0%，產能利用率將提升至80~85%。\n\n2026年資本支出約650~700億元，多數投入新加坡12吋廠設備採購。新加坡12吋廠預計2026Q2季底送樣驗證，2026Q4開始試產，最快將於2027Q1正式量產。\n\n公司自研GaN-on-QST技術將佈局800~1200V超高壓功率元件，可望切入AI伺服器800V HVDC供電架構、電動車inverter。\n\n近期台積電內部研議停止承接90nm製程訂單、縮減65nm、45nm製程產能，甚至將部份22/28nm製程訂單委外世界先進。"
+            },
+            {
+                code: "6937",
+                name: "天虹",
+                status: "positive",
+                summary: "2026年財測EPS區間7.0~8.0元，EUV光罩護膜、Micro LED、FOPLP設備等新應用發展",
+                content: "2025年營收22.45億元，YoY -13.3%，營收較前一年度衰退，儘管零組件業務營收表現優於預期，但設備業務受到化合物半導體產業景氣低迷影響。\n\n展望2026年，財測營收區間YoY +20~30%，零組件業務新產品Heating Pipe於關鍵客戶廠內測試結果良好，2026年將開始少量貢獻營收。\n\nPVD設備受惠於國內專業封測代工廠擴充CoWoS先進封裝產能，主要客戶將開始交付回購訂單。\n\nALD設備持續拓展矽基半導體、Micro LED等終端應用，包括矽光子共封裝(CPO)ALD鍍膜保護層。Micro LED受惠於智慧眼鏡開始導入，2026年有機會交付5~10台設備。\n\nEUV光罩護膜所需ALD設備、檢測設備，將於2026年交付至關鍵客戶。FOPLP PVD設備已於2026年初交付至國內專業封測代工廠。"
+            },
+            {
+                code: "6285",
+                name: "啟碁",
+                status: "positive",
+                summary: "2026年財測EPS上修至10.82元，低軌道衛星業務營收成長3~4倍，800G交換器逐步放量",
+                content: "2025Q4營收270.15億元，QoQ -1.3%，YoY -3.3%，毛利率14.1%，EPS 2.06元。本季營收較前一季度衰退，反映客戶仍受到關稅不確定性影響，拉貨動能放緩。\n\n展望2026年財測營收區間YoY+23~25%，低軌道衛星業務受惠於營運商用戶訂閱數大幅增加，營收可望成長3~4倍，5G FWA、Wi-Fi 7受惠於電信營運商拉貨動能逐步回溫，800G交換器逐步放量出貨企業級伺服器客戶。\n\n公司積極投入全光交換器(OCS)開發，預期2027年開始初步貢獻營收。\n\n網通產品亦受惠於關稅不確定性降低，以及歐洲網路安全法去中化影響，使客戶拉貨動能回溫，並陸續將記憶體成本上漲轉嫁給客戶。"
+            },
+            {
+                code: "3711",
+                name: "日月光",
+                status: "positive",
+                summary: "2026年財測EPS達12.62元，先進封裝與測試營收從26億美元上修至32億美元，較前一年度倍增",
+                content: "2025Q4營收1,779億元，QoQ +5.5%、YoY +9.6%，毛利率19.5%，EPS 3.37元。本季營收較前一季度成長，受惠於AI晶片對於先進封裝與測試需求持續成長。\n\n展望2026Q1，財測營收區間QoQ -4~-9%，毛利率區間17.0~19.0%，反映適逢農曆春節假期、工作天數減少。半導體封測事業持續受惠於AI晶片需求強勁，營收僅較前一季度小幅衰退。\n\n展望2026年，先進封裝與測試營收從26億美元上修至32億美元，較前一年度倍增，受惠於規模經濟效益提升，帶動半導體封測事業毛利率持續往24.0~25.0%區間上緣。\n\n2026年資本支出將從55億美元提高至70億美元，其中設備採購金額從34億美元提高至49億美元，主要投入先進封裝與CP測試產能擴充。\n\n公司不僅承接台積電擴大委外後段oS製程、Flip Chip Bump等訂單，也直接與雲端服務商合作建立第二供應鏈。"
+            },
+            {
+                code: "2454",
+                name: "聯發科",
+                status: "neutral",
+                summary: "2026年財測EPS 61.89元，手機受記憶體缺料影響市佔流失，但AI ASIC合作擴大，2027年營收貢獻數十億美元",
+                content: "2025Q4營收1,502億元，QoQ +5.7%、YoY +8.8%，毛利率46.1%，EPS 14.39元。營收較前一季度成長，受惠於天璣9500、天璣8500在旗艦、中高階機種市場放量出貨。\n\n展望2026Q1，財測營收區間1,412~1,502億元，毛利率區間44.5~47.5%。營收較前一季度小幅衰退，反映手機市場進入傳統淡季，以及手機品牌客戶面臨記憶體供給短缺與成本上漲的壓力，開始下修生產計劃。\n\n然而，受惠於高階Tablet市場有所斬獲，以及運算相關產品Chromebook CPU、DGX Spark GB10出貨量持續成長，部份抵銷手機市場衰退。\n\n公司持續與雲端服務商自研AI ASIC擴大合作，有信心達成2026年營收貢獻10億美元的目標，2027年進一步成長至數十億美元。\n\n陸系手機品牌業者受記憶體缺料影響程度大於Apple、Samsung，短期內恐面臨市佔率流失，直接衝擊聯發科Mobile Phone業務。"
+            },
+            {
+                code: "3324",
+                name: "雙鴻",
+                status: "positive",
+                summary: "2026年財測EPS上修至53.36元，NVIDIA GB300 NVL 72液冷散熱零組件放量出貨，切入雲端服務商ASIC專案",
+                content: "2025Q4營收76.0億元，QoQ +27.5%、YoY +84.1%。本季營收較前一季度強勁成長，受惠於NVIDIA GB300 NVL 72液冷散熱零組件放量出貨，以及泰國廠產能爬坡，帶動伺服器產品營收佔比從60%提升至72%，其中伺服器液冷產品營收佔比從35%提升至51%。\n\n展望2026Q1，財測營收區間QoQ flattish，毛利率區間28.5~29.5%，反映伺服器產品出貨動能維持強勁，但消費性電子市場進入傳統淡季。\n\n2026上半年將持續受惠於NVIDIA GB300 NVL 72放量出貨，2026下半年即將推出的NVIDIA VR200 NVL 144，雖然受到統一採購機制影響，恐面臨價格壓力，但Cold Plate、QD等零組件用量仍持續提升，預估每台機櫃液冷散熱零組件產值仍較前一世代提升30~50%。\n\n雲端服務商自研ASIC伺服器加速導入液冷散熱解決方案，公司已切入其中一家雲端服務商客戶，涵蓋Compute Tray、Switch Tray與CDM，將於2026下半年開始放量出貨。"
+            }
+        ];
+
+        function renderNotes() {
+            var container = document.getElementById("notesList");
+            var html = "";
+
+            for (var i = 0; i < notesData.length; i++) {
+                var note = notesData[i];
+                html += '<div class="note-item" id="note-' + note.code + '">';
+                html += '<div class="checkbox-row">';
+                html += '<input type="checkbox" id="check-' + note.code + '" checked>';
+                html += '<div class="note-header">';
+                html += '<span class="note-code">' + note.code + '</span>';
+                html += '<span class="note-name">' + note.name + '</span>';
+                html += '<span class="note-status status-' + note.status + '">' + note.status + '</span>';
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="note-summary">' + note.summary + '</div>';
+                html += '<div class="note-toggle" onclick="toggleContent(\'' + note.code + '\')">顯示全文</div>';
+                html += '<div class="note-content" id="content-' + note.code + '">' + escapeHtml(note.content) + '</div>';
+                html += '<div class="note-result" id="result-' + note.code + '"></div>';
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        function toggleContent(code) {
+            var content = document.getElementById("content-" + code);
+            var toggle = content.previousElementSibling;
+            if (content.style.display === "none" || content.style.display === "") {
+                content.style.display = "block";
+                toggle.textContent = "隱藏全文";
+            } else {
+                content.style.display = "none";
+                toggle.textContent = "顯示全文";
+            }
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function importAll() {
+            var adminKey = document.getElementById("adminKey").value;
+            var reportDate = document.getElementById("reportDate").value;
+
+            if (!adminKey) {
+                alert("請輸入管理員密碼");
+                return;
+            }
+
+            if (!reportDate) {
+                alert("請選擇週報日期");
+                return;
+            }
+
+            var btn = document.getElementById("importBtn");
+            var progress = document.getElementById("progress");
+            btn.disabled = true;
+
+            var selected = [];
+            for (var i = 0; i < notesData.length; i++) {
+                var checkbox = document.getElementById("check-" + notesData[i].code);
+                if (checkbox && checkbox.checked) {
+                    selected.push(notesData[i]);
+                }
+            }
+
+            var success = 0;
+            var failed = 0;
+
+            for (var j = 0; j < selected.length; j++) {
+                var note = selected[j];
+                progress.textContent = "匯入中... " + (j + 1) + "/" + selected.length + " (" + note.code + " " + note.name + ")";
+
+                try {
+                    var resp = await fetch(WORKER_URL + "/api/stock-notes", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Key": adminKey
+                        },
+                        body: JSON.stringify({
+                            code: note.code,
+                            status: note.status,
+                            summary: note.summary,
+                            content: note.content,
+                            date: reportDate
+                        })
+                    });
+
+                    var result = await resp.json();
+                    var resultEl = document.getElementById("result-" + note.code);
+
+                    if (resp.ok && result.success) {
+                        success++;
+                        resultEl.className = "note-result result-success";
+                        resultEl.textContent = "匯入成功 (" + result.action + ")";
+                    } else {
+                        failed++;
+                        resultEl.className = "note-result result-error";
+                        resultEl.textContent = "匯入失敗: " + (result.error || "未知錯誤");
+                    }
+                } catch (e) {
+                    failed++;
+                    var errEl = document.getElementById("result-" + note.code);
+                    errEl.className = "note-result result-error";
+                    errEl.textContent = "匯入失敗: " + e.message;
+                }
+
+                // 延遲避免請求過快
+                await new Promise(function(resolve) { setTimeout(resolve, 300); });
+            }
+
+            progress.textContent = "匯入完成！成功: " + success + "，失敗: " + failed;
+            btn.disabled = false;
+        }
+
+        renderNotes();
+    </script>
+</body>
+</html>
