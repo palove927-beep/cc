@@ -9,10 +9,10 @@ workers_dev = true
 # 1. Create D1: npx wrangler d1 create stock-notes
 # 2. Update the database_id below
 # 3. Run migration: npx wrangler d1 execute stock-notes --file=./migrations/001_create_notes.sql
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "stock-notes"
-# database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+[[d1_databases]]
+binding = "DB"
+database_name = "stock-notes"
+database_id = "25569f6a-7ab9-41b4-a191-90f96e0a5624"
 
 # Environment variables (set in Cloudflare Dashboard):
 # - FUGLE_API_KEY: Fugle API key
