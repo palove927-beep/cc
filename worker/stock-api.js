@@ -9,13 +9,14 @@
  *   - FUGLE_API_KEY: Fugle API 金鑰（興櫃股票用）
  *   - ADMIN_KEY: 管理員密碼（週報筆記用）
  *
- * KV Namespace:
- *   - STOCK_NOTES: 儲存個股週報筆記
+ * D1 Database:
+ *   - DB: 儲存個股週報筆記 (SQLite)
  *
  * API 用法：
  *   單支股票：  /api/stock?code=2330
  *   多支股票：  /api/stock?code=2330,2303,6826
  *   股票筆記：  /api/stock-notes (GET/POST/DELETE)
+ *   筆記歷史：  /api/stock-notes/history?code=2059
  *
  * 回傳格式：
  *   { "data": [{ "code": "2330", "name": "台積電", "price": 1810.00 }], "time": "..." }
@@ -58,17 +59,22 @@ export default {
     // 股票筆記 API
     if (url.pathname === "/api/stock-notes") {
       if (request.method === "GET") {
-        return corsResponse(await handleGetNotes(env));
+        return corsResponse(await handleGetNotes(url, env));
       }
       if (request.method === "POST") {
         return corsResponse(await handleSaveNote(request, env));
       }
     }
 
+    // 筆記歷史查詢
+    if (url.pathname === "/api/stock-notes/history") {
+      return corsResponse(await handleGetNoteHistory(url, env));
+    }
+
     // 刪除單一筆記
     if (url.pathname.startsWith("/api/stock-notes/") && request.method === "DELETE") {
-      var code = url.pathname.replace("/api/stock-notes/", "");
-      return corsResponse(await handleDeleteNote(code, request, env));
+      var id = url.pathname.replace("/api/stock-notes/", "");
+      return corsResponse(await handleDeleteNote(id, request, env));
     }
 
     return corsResponse(new Response(
@@ -516,16 +522,87 @@ function adjustForSplits(code, dateNum, price) {
 }
 
 /**
- * 取得所有股票筆記
+ * 取得所有股票最新筆記
+ * GET /api/stock-notes
+ * GET /api/stock-notes?date=2026-02-20 (指定日期)
  */
-async function handleGetNotes(env) {
-  if (!env || !env.STOCK_NOTES) {
-    return jsonResponse({ error: "KV 尚未設定" }, 500);
+async function handleGetNotes(url, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
   try {
-    var notes = await env.STOCK_NOTES.get("notes", "json");
-    return jsonResponse(notes || {});
+    var dateParam = url.searchParams.get("date");
+    var result;
+
+    if (dateParam) {
+      // 查詢指定日期的筆記
+      result = await env.DB.prepare(
+        "SELECT * FROM notes WHERE report_date = ? ORDER BY stock_code"
+      ).bind(dateParam).all();
+    } else {
+      // 查詢每支股票的最新筆記
+      result = await env.DB.prepare(`
+        SELECT n.* FROM notes n
+        INNER JOIN (
+          SELECT stock_code, MAX(report_date) as max_date
+          FROM notes GROUP BY stock_code
+        ) latest ON n.stock_code = latest.stock_code AND n.report_date = latest.max_date
+        ORDER BY n.stock_code
+      `).all();
+    }
+
+    // 轉換為 { code: note } 格式（兼容前端）
+    var notes = {};
+    for (var i = 0; i < result.results.length; i++) {
+      var row = result.results[i];
+      notes[row.stock_code] = {
+        id: row.id,
+        status: row.status,
+        summary: row.summary,
+        content: row.content,
+        date: row.report_date
+      };
+    }
+
+    return jsonResponse(notes);
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 取得某股票的歷史筆記
+ * GET /api/stock-notes/history?code=2059
+ */
+async function handleGetNoteHistory(url, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
+  }
+
+  var code = url.searchParams.get("code");
+  if (!code) {
+    return jsonResponse({ error: "請提供 code 參數" }, 400);
+  }
+
+  try {
+    var result = await env.DB.prepare(
+      "SELECT * FROM notes WHERE stock_code = ? ORDER BY report_date DESC LIMIT 50"
+    ).bind(code).all();
+
+    return jsonResponse({
+      stock_code: code,
+      history: result.results.map(function(row) {
+        return {
+          id: row.id,
+          status: row.status,
+          summary: row.summary,
+          content: row.content,
+          date: row.report_date,
+          created_at: row.created_at
+        };
+      })
+    });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -533,10 +610,11 @@ async function handleGetNotes(env) {
 
 /**
  * 儲存股票筆記
+ * POST /api/stock-notes
  */
 async function handleSaveNote(request, env) {
-  if (!env || !env.STOCK_NOTES) {
-    return jsonResponse({ error: "KV 尚未設定" }, 500);
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
   // 驗證管理員密碼
@@ -548,26 +626,45 @@ async function handleSaveNote(request, env) {
   try {
     var body = await request.json();
     var code = body.code;
+    var reportDate = body.date || new Date().toISOString().split("T")[0];
 
     if (!code) {
       return jsonResponse({ error: "請提供股票代號" }, 400);
     }
 
-    // 讀取現有筆記
-    var notes = await env.STOCK_NOTES.get("notes", "json") || {};
+    // 檢查是否已存在同日期的筆記
+    var existing = await env.DB.prepare(
+      "SELECT id FROM notes WHERE stock_code = ? AND report_date = ?"
+    ).bind(code, reportDate).first();
 
-    // 更新或新增
-    notes[code] = {
-      status: body.status || "neutral",
-      summary: body.summary || "",
-      content: body.content || "",
-      date: body.date || new Date().toISOString().split("T")[0]
-    };
+    if (existing) {
+      // 更新現有筆記
+      await env.DB.prepare(`
+        UPDATE notes SET status = ?, summary = ?, content = ?
+        WHERE id = ?
+      `).bind(
+        body.status || "neutral",
+        body.summary || "",
+        body.content || "",
+        existing.id
+      ).run();
 
-    // 儲存
-    await env.STOCK_NOTES.put("notes", JSON.stringify(notes));
+      return jsonResponse({ success: true, code: code, id: existing.id, action: "updated" });
+    } else {
+      // 新增筆記
+      var result = await env.DB.prepare(`
+        INSERT INTO notes (stock_code, status, summary, content, report_date)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(
+        code,
+        body.status || "neutral",
+        body.summary || "",
+        body.content || "",
+        reportDate
+      ).run();
 
-    return jsonResponse({ success: true, code: code });
+      return jsonResponse({ success: true, code: code, id: result.meta.last_row_id, action: "created" });
+    }
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -575,10 +672,11 @@ async function handleSaveNote(request, env) {
 
 /**
  * 刪除股票筆記
+ * DELETE /api/stock-notes/:id
  */
-async function handleDeleteNote(code, request, env) {
-  if (!env || !env.STOCK_NOTES) {
-    return jsonResponse({ error: "KV 尚未設定" }, 500);
+async function handleDeleteNote(id, request, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
   // 驗證管理員密碼
@@ -588,14 +686,8 @@ async function handleDeleteNote(code, request, env) {
   }
 
   try {
-    var notes = await env.STOCK_NOTES.get("notes", "json") || {};
-
-    if (notes[code]) {
-      delete notes[code];
-      await env.STOCK_NOTES.put("notes", JSON.stringify(notes));
-    }
-
-    return jsonResponse({ success: true, deleted: code });
+    await env.DB.prepare("DELETE FROM notes WHERE id = ?").bind(id).run();
+    return jsonResponse({ success: true, deleted: id });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
