@@ -1,4 +1,4 @@
-name = "stock-api"
+name = "cc"
 main = "worker/stock-api.js"
 compatibility_date = "2024-01-01"
 
