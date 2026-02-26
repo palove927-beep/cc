@@ -7,10 +7,15 @@
  *
  * 環境變數（在 Cloudflare Dashboard 設定）：
  *   - FUGLE_API_KEY: Fugle API 金鑰（興櫃股票用）
+ *   - ADMIN_KEY: 管理員密碼（週報筆記用）
+ *
+ * KV Namespace:
+ *   - STOCK_NOTES: 儲存個股週報筆記
  *
  * API 用法：
  *   單支股票：  /api/stock?code=2330
  *   多支股票：  /api/stock?code=2330,2303,6826
+ *   股票筆記：  /api/stock-notes (GET/POST/DELETE)
  *
  * 回傳格式：
  *   { "data": [{ "code": "2330", "name": "台積電", "price": 1810.00 }], "time": "..." }
@@ -48,6 +53,22 @@ export default {
     // Fugle 歷史 K 線查詢
     if (url.pathname === "/api/fugle-candles") {
       return corsResponse(await handleFugleCandles(url, env));
+    }
+
+    // 股票筆記 API
+    if (url.pathname === "/api/stock-notes") {
+      if (request.method === "GET") {
+        return corsResponse(await handleGetNotes(env));
+      }
+      if (request.method === "POST") {
+        return corsResponse(await handleSaveNote(request, env));
+      }
+    }
+
+    // 刪除單一筆記
+    if (url.pathname.startsWith("/api/stock-notes/") && request.method === "DELETE") {
+      var code = url.pathname.replace("/api/stock-notes/", "");
+      return corsResponse(await handleDeleteNote(code, request, env));
     }
 
     return corsResponse(new Response(
@@ -494,6 +515,92 @@ function adjustForSplits(code, dateNum, price) {
   return Math.round(adjustedPrice * 100) / 100;
 }
 
+/**
+ * 取得所有股票筆記
+ */
+async function handleGetNotes(env) {
+  if (!env || !env.STOCK_NOTES) {
+    return jsonResponse({ error: "KV 尚未設定" }, 500);
+  }
+
+  try {
+    var notes = await env.STOCK_NOTES.get("notes", "json");
+    return jsonResponse(notes || {});
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 儲存股票筆記
+ */
+async function handleSaveNote(request, env) {
+  if (!env || !env.STOCK_NOTES) {
+    return jsonResponse({ error: "KV 尚未設定" }, 500);
+  }
+
+  // 驗證管理員密碼
+  var adminKey = request.headers.get("X-Admin-Key");
+  if (env.ADMIN_KEY && adminKey !== env.ADMIN_KEY) {
+    return jsonResponse({ error: "未授權" }, 401);
+  }
+
+  try {
+    var body = await request.json();
+    var code = body.code;
+
+    if (!code) {
+      return jsonResponse({ error: "請提供股票代號" }, 400);
+    }
+
+    // 讀取現有筆記
+    var notes = await env.STOCK_NOTES.get("notes", "json") || {};
+
+    // 更新或新增
+    notes[code] = {
+      status: body.status || "neutral",
+      summary: body.summary || "",
+      content: body.content || "",
+      date: body.date || new Date().toISOString().split("T")[0]
+    };
+
+    // 儲存
+    await env.STOCK_NOTES.put("notes", JSON.stringify(notes));
+
+    return jsonResponse({ success: true, code: code });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 刪除股票筆記
+ */
+async function handleDeleteNote(code, request, env) {
+  if (!env || !env.STOCK_NOTES) {
+    return jsonResponse({ error: "KV 尚未設定" }, 500);
+  }
+
+  // 驗證管理員密碼
+  var adminKey = request.headers.get("X-Admin-Key");
+  if (env.ADMIN_KEY && adminKey !== env.ADMIN_KEY) {
+    return jsonResponse({ error: "未授權" }, 401);
+  }
+
+  try {
+    var notes = await env.STOCK_NOTES.get("notes", "json") || {};
+
+    if (notes[code]) {
+      delete notes[code];
+      await env.STOCK_NOTES.put("notes", JSON.stringify(notes));
+    }
+
+    return jsonResponse({ success: true, deleted: code });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
 function jsonResponse(obj, status) {
   return new Response(JSON.stringify(obj), {
     status: status || 200,
@@ -504,8 +611,8 @@ function jsonResponse(obj, status) {
 function corsResponse(response) {
   var headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
   return new Response(response.body, {
     status: response.status,
     headers: headers

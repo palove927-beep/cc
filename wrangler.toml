@@ -4,3 +4,14 @@ compatibility_date = "2024-01-01"
 
 # 免費方案設定
 workers_dev = true
+
+# KV Namespace for stock notes
+# 1. Create KV: npx wrangler kv:namespace create STOCK_NOTES
+# 2. Uncomment and update the id below:
+# [[kv_namespaces]]
+# binding = "STOCK_NOTES"
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Environment variables (set in Cloudflare Dashboard):
+# - FUGLE_API_KEY: Fugle API key
+# - ADMIN_KEY: Admin password for managing notes

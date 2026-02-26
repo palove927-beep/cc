@@ -99,6 +99,56 @@
         .refresh-btn:hover { background: #444; }
         .update-time { margin-top: 12px; font-size: 12px; color: #999; }
         .note { font-size: 12px; color: #666; margin-bottom: 16px; }
+        /* Note indicator styles */
+        .note-indicator {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 18px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 4px;
+        }
+        .note-positive { background: #c8e6c9; color: #2e7d32; }
+        .note-neutral { background: #fff9c4; color: #f57f17; }
+        .note-negative { background: #ffcdd2; color: #c62828; }
+        .note-row {
+            display: none;
+        }
+        .note-row.show {
+            display: table-row;
+        }
+        .note-row td {
+            background: #fafafa;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #555;
+        }
+        .note-summary { margin-bottom: 8px; }
+        .note-content {
+            white-space: pre-wrap;
+            background: #fff;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .note-date { font-size: 11px; color: #999; margin-top: 8px; }
+        .note-toggle {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .note-toggle:hover { background: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -283,6 +333,7 @@
 
         // Cloudflare Worker URL
         var WORKER_URL = "https://cc.palove927.workers.dev";
+        var stockNotes = {};
 
         function updatePrice(code, price) {
             var priceEl = document.getElementById("price-" + code);
@@ -324,7 +375,94 @@
             statusEl.textContent = "無法取得股價資料";
         }
 
+        async function fetchStockNotes() {
+            try {
+                var resp = await fetch(WORKER_URL + "/api/stock-notes");
+                if (resp.ok) {
+                    stockNotes = await resp.json();
+                    renderNoteIndicators();
+                }
+            } catch (e) {
+                console.log("Notes not available");
+            }
+        }
+
+        function renderNoteIndicators() {
+            // Find all stock rows and add note indicators
+            var table = document.querySelector(".stock-table");
+            var rows = table.querySelectorAll("tr");
+
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (row.classList.contains("category-row")) continue;
+
+                var cells = row.querySelectorAll("td");
+                if (cells.length < 4) continue;
+
+                var codeCell = cells[3];
+                if (!codeCell) continue;
+
+                var code = codeCell.textContent.trim();
+                var note = stockNotes[code];
+
+                if (note) {
+                    // Add indicator to stock name cell
+                    var nameCell = cells[2];
+                    var existingIndicator = nameCell.querySelector(".note-indicator");
+                    if (!existingIndicator) {
+                        var indicator = document.createElement("span");
+                        indicator.className = "note-indicator note-" + note.status;
+                        indicator.textContent = note.status === "positive" ? "+" : (note.status === "negative" ? "-" : "?");
+                        indicator.title = note.summary || "點擊查看筆記";
+                        indicator.onclick = function(c) {
+                            return function() { toggleNoteRow(c); };
+                        }(code);
+                        nameCell.appendChild(indicator);
+
+                        // Create note row
+                        var noteRow = document.createElement("tr");
+                        noteRow.className = "note-row";
+                        noteRow.id = "note-row-" + code;
+                        var noteCell = document.createElement("td");
+                        noteCell.colSpan = 5;
+                        noteCell.innerHTML = '<div class="note-summary"><strong>' + escapeHtml(note.summary) + '</strong></div>' +
+                            (note.content ? '<button class="note-toggle" onclick="toggleNoteContent(\'' + code + '\')">顯示全文</button>' +
+                            '<div class="note-content" id="note-content-' + code + '" style="display:none;">' + escapeHtml(note.content) + '</div>' : '') +
+                            '<div class="note-date">更新：' + (note.date || '') + '</div>';
+                        noteRow.appendChild(noteCell);
+                        row.parentNode.insertBefore(noteRow, row.nextSibling);
+                    }
+                }
+            }
+        }
+
+        function toggleNoteRow(code) {
+            var noteRow = document.getElementById("note-row-" + code);
+            if (noteRow) {
+                noteRow.classList.toggle("show");
+            }
+        }
+
+        function toggleNoteContent(code) {
+            var content = document.getElementById("note-content-" + code);
+            var btn = content.previousElementSibling;
+            if (content.style.display === "none") {
+                content.style.display = "block";
+                btn.textContent = "隱藏全文";
+            } else {
+                content.style.display = "none";
+                btn.textContent = "顯示全文";
+            }
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         fetchStockData();
+        fetchStockNotes();
     </script>
     </div>
 </body>

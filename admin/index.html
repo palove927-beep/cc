@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週報管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        nav { margin-bottom: 24px; }
+        nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
+        nav a:hover { text-decoration: underline; }
+        h1 { font-size: 24px; margin-bottom: 24px; }
+        h2 { font-size: 18px; margin-bottom: 16px; color: #24292e; }
+        .section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+        .form-row .form-group { flex: 1; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        textarea { resize: vertical; min-height: 120px; }
+        .btn {
+            padding: 10px 20px;
+            background: #24292e;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover { background: #444; }
+        .btn-danger { background: #e53935; }
+        .btn-danger:hover { background: #c62828; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .notes-list { margin-top: 16px; }
+        .note-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .note-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .note-code {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .note-status {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .status-positive { background: #c8e6c9; color: #2e7d32; }
+        .status-negative { background: #ffcdd2; color: #c62828; }
+        .status-neutral { background: #fff9c4; color: #f57f17; }
+        .note-summary { font-size: 14px; color: #555; margin-bottom: 8px; }
+        .note-content {
+            font-size: 13px;
+            color: #666;
+            background: #fff;
+            padding: 12px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .note-content.show { display: block; }
+        .note-date { font-size: 12px; color: #999; }
+        .note-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .note-actions button {
+            padding: 4px 12px;
+            font-size: 12px;
+        }
+        .toggle-btn {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .toggle-btn:hover { background: #f0f0f0; }
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .message-success { background: #c8e6c9; color: #2e7d32; }
+        .message-error { background: #ffcdd2; color: #c62828; }
+        .auth-form {
+            max-width: 300px;
+            margin: 100px auto;
+        }
+        .hidden { display: none; }
+        .stock-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .stock-chip {
+            display: inline-flex;
+            align-items: center;
+            background: #e3f2fd;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+        }
+        .stock-chip .remove {
+            margin-left: 6px;
+            cursor: pointer;
+            color: #666;
+        }
+        .stock-chip .remove:hover { color: #c62828; }
+    </style>
+</head>
+<body>
+    <!-- Auth Form -->
+    <div id="auth-section" class="auth-form">
+        <div class="section">
+            <h2>管理員登入</h2>
+            <div class="form-group">
+                <label>密碼</label>
+                <input type="password" id="auth-password" placeholder="請輸入管理密碼">
+            </div>
+            <button class="btn" onclick="login()">登入</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-section" class="container hidden">
+        <nav><a href="/cc/">← 首頁</a> | <a href="/cc/stock/">股票即時報價</a></nav>
+        <h1>週報管理</h1>
+
+        <div id="message"></div>
+
+        <!-- Add/Edit Note Form -->
+        <div class="section">
+            <h2 id="form-title">新增個股筆記</h2>
+            <input type="hidden" id="edit-mode" value="">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>股票代號</label>
+                    <input type="text" id="stock-code" placeholder="例如: 2059">
+                </div>
+                <div class="form-group">
+                    <label>狀態</label>
+                    <select id="stock-status">
+                        <option value="positive">正面 (綠)</option>
+                        <option value="neutral">觀望 (黃)</option>
+                        <option value="negative">負面 (紅)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>摘要 (顯示在股票列表)</label>
+                <input type="text" id="stock-summary" placeholder="簡短描述，例如: 重返NVIDIA供應鏈">
+            </div>
+
+            <div class="form-group">
+                <label>完整內容 (週報原文)</label>
+                <textarea id="stock-content" placeholder="貼上週報中與該股票相關的完整段落..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>週報日期</label>
+                <input type="date" id="report-date">
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn" onclick="saveNote()">儲存</button>
+                <button class="btn btn-secondary" onclick="clearForm()">清除</button>
+            </div>
+        </div>
+
+        <!-- Existing Notes -->
+        <div class="section">
+            <h2>已儲存的筆記</h2>
+            <button class="btn btn-secondary" onclick="loadNotes()" style="margin-bottom: 16px;">重新載入</button>
+            <div id="notes-list" class="notes-list">
+                <p style="color: #999;">載入中...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var WORKER_URL = "https://cc.palove927.workers.dev";
+        var AUTH_KEY = "";
+
+        // Simple auth check
+        function login() {
+            var pwd = document.getElementById("auth-password").value;
+            // Simple hash check (not secure, but better than plaintext)
+            AUTH_KEY = pwd;
+            // Try to load notes to verify
+            fetch(WORKER_URL + "/api/stock-notes", {
+                headers: { "X-Admin-Key": AUTH_KEY }
+            })
+            .then(function(r) {
+                if (r.ok) {
+                    document.getElementById("auth-section").classList.add("hidden");
+                    document.getElementById("main-section").classList.remove("hidden");
+                    loadNotes();
+                    // Set default date to today
+                    document.getElementById("report-date").valueAsDate = new Date();
+                } else {
+                    showMessage("密碼錯誤", "error");
+                }
+            })
+            .catch(function() {
+                // If API doesn't require auth yet, just proceed
+                document.getElementById("auth-section").classList.add("hidden");
+                document.getElementById("main-section").classList.remove("hidden");
+                loadNotes();
+                document.getElementById("report-date").valueAsDate = new Date();
+            });
+        }
+
+        function showMessage(text, type) {
+            var msgEl = document.getElementById("message");
+            msgEl.className = "message message-" + type;
+            msgEl.textContent = text;
+            msgEl.style.display = "block";
+            setTimeout(function() { msgEl.style.display = "none"; }, 3000);
+        }
+
+        function loadNotes() {
+            fetch(WORKER_URL + "/api/stock-notes", {
+                headers: { "X-Admin-Key": AUTH_KEY }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderNotes(data);
+            })
+            .catch(function() {
+                document.getElementById("notes-list").innerHTML = "<p style='color:#999;'>尚無筆記，或 API 尚未設定</p>";
+            });
+        }
+
+        function renderNotes(notes) {
+            var container = document.getElementById("notes-list");
+            if (!notes || Object.keys(notes).length === 0) {
+                container.innerHTML = "<p style='color:#999;'>尚無筆記</p>";
+                return;
+            }
+
+            var html = "";
+            var statusLabels = {
+                positive: "正面",
+                neutral: "觀望",
+                negative: "負面"
+            };
+
+            for (var code in notes) {
+                var note = notes[code];
+                html += '<div class="note-item" data-code="' + code + '">';
+                html += '<div class="note-header">';
+                html += '<span class="note-code">' + code + '</span>';
+                html += '<span class="note-status status-' + note.status + '">' + statusLabels[note.status] + '</span>';
+                html += '<span class="note-date">' + (note.date || "") + '</span>';
+                html += '</div>';
+                html += '<div class="note-summary">' + escapeHtml(note.summary || "") + '</div>';
+                html += '<button class="toggle-btn" onclick="toggleContent(this)">顯示全文</button>';
+                html += '<div class="note-content">' + escapeHtml(note.content || "") + '</div>';
+                html += '<div class="note-actions">';
+                html += '<button class="btn btn-secondary" onclick="editNote(\'' + code + '\')">編輯</button>';
+                html += '<button class="btn btn-danger" onclick="deleteNote(\'' + code + '\')">刪除</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function toggleContent(btn) {
+            var content = btn.nextElementSibling;
+            if (content.classList.contains("show")) {
+                content.classList.remove("show");
+                btn.textContent = "顯示全文";
+            } else {
+                content.classList.add("show");
+                btn.textContent = "隱藏全文";
+            }
+        }
+
+        function saveNote() {
+            var code = document.getElementById("stock-code").value.trim();
+            var status = document.getElementById("stock-status").value;
+            var summary = document.getElementById("stock-summary").value.trim();
+            var content = document.getElementById("stock-content").value.trim();
+            var date = document.getElementById("report-date").value;
+
+            if (!code) {
+                showMessage("請輸入股票代號", "error");
+                return;
+            }
+
+            var noteData = {
+                code: code,
+                status: status,
+                summary: summary,
+                content: content,
+                date: date
+            };
+
+            fetch(WORKER_URL + "/api/stock-notes", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Key": AUTH_KEY
+                },
+                body: JSON.stringify(noteData)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    showMessage("儲存成功", "success");
+                    clearForm();
+                    loadNotes();
+                } else {
+                    showMessage("儲存失敗: " + (result.error || "未知錯誤"), "error");
+                }
+            })
+            .catch(function(e) {
+                showMessage("儲存失敗: " + e.message, "error");
+            });
+        }
+
+        function editNote(code) {
+            // Find the note data from the DOM
+            var noteEl = document.querySelector('.note-item[data-code="' + code + '"]');
+            if (!noteEl) return;
+
+            document.getElementById("stock-code").value = code;
+            document.getElementById("stock-summary").value = noteEl.querySelector(".note-summary").textContent;
+            document.getElementById("stock-content").value = noteEl.querySelector(".note-content").textContent;
+            document.getElementById("report-date").value = noteEl.querySelector(".note-date").textContent;
+
+            // Determine status from class
+            var statusEl = noteEl.querySelector(".note-status");
+            if (statusEl.classList.contains("status-positive")) {
+                document.getElementById("stock-status").value = "positive";
+            } else if (statusEl.classList.contains("status-negative")) {
+                document.getElementById("stock-status").value = "negative";
+            } else {
+                document.getElementById("stock-status").value = "neutral";
+            }
+
+            document.getElementById("form-title").textContent = "編輯 " + code;
+            document.getElementById("edit-mode").value = code;
+
+            // Scroll to form
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function deleteNote(code) {
+            if (!confirm("確定要刪除 " + code + " 的筆記嗎？")) return;
+
+            fetch(WORKER_URL + "/api/stock-notes/" + code, {
+                method: "DELETE",
+                headers: { "X-Admin-Key": AUTH_KEY }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    showMessage("已刪除", "success");
+                    loadNotes();
+                } else {
+                    showMessage("刪除失敗", "error");
+                }
+            })
+            .catch(function(e) {
+                showMessage("刪除失敗: " + e.message, "error");
+            });
+        }
+
+        function clearForm() {
+            document.getElementById("stock-code").value = "";
+            document.getElementById("stock-status").value = "positive";
+            document.getElementById("stock-summary").value = "";
+            document.getElementById("stock-content").value = "";
+            document.getElementById("report-date").valueAsDate = new Date();
+            document.getElementById("form-title").textContent = "新增個股筆記";
+            document.getElementById("edit-mode").value = "";
+        }
+
+        // Allow Enter key to login
+        document.getElementById("auth-password").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") login();
+        });
+    </script>
+</body>
+</html>
