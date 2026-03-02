@@ -404,6 +404,9 @@ function hasValidPrice(stock) {
   if (stock.z && stock.z !== "-") return true;
   if (stock.b && stock.b !== "-") return true;
   if (stock.a && stock.a !== "-") return true;
+  // 漲停/跌停時可能只有昨收或漲跌停價
+  if (stock.y && stock.y !== "-") return true;
+  if (stock.u && stock.u !== "-") return true;
   return false;
 }
 
@@ -428,21 +431,41 @@ async function fetchTWSE(url) {
 }
 
 /**
- * 取得現價：z（成交價）→ b 第一個（最新買價）→ a 第一個（最新賣價）
+ * 取得現價：z（成交價）→ b（最新買價）→ a（最新賣價）→ u（漲停價）→ w（跌停價）→ y（昨收）
+ * 漲停時：z 可能有值或為 "-"，b 應該是漲停價，a 通常為 "-"
+ * 跌停時：z 可能有值或為 "-"，a 應該是跌停價，b 通常為 "-"
  */
 function getPrice(stock) {
+  // 1. 成交價
   if (stock.z && stock.z !== "-") {
     var val = parseFloat(stock.z);
     if (!isNaN(val) && val > 0) return val;
   }
+  // 2. 最佳買價（漲停時買盤掛在漲停價）
   if (stock.b && stock.b !== "-") {
     var first = stock.b.split("_")[0];
     var val = parseFloat(first);
     if (!isNaN(val) && val > 0) return val;
   }
+  // 3. 最佳賣價（跌停時賣盤掛在跌停價）
   if (stock.a && stock.a !== "-") {
     var first = stock.a.split("_")[0];
     var val = parseFloat(first);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  // 4. 漲停價（無成交時的參考價）
+  if (stock.u && stock.u !== "-") {
+    var val = parseFloat(stock.u);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  // 5. 跌停價
+  if (stock.w && stock.w !== "-") {
+    var val = parseFloat(stock.w);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  // 6. 昨收（最後手段）
+  if (stock.y && stock.y !== "-") {
+    var val = parseFloat(stock.y);
     if (!isNaN(val) && val > 0) return val;
   }
   return null;
