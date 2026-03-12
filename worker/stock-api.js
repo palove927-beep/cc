@@ -787,10 +787,11 @@ async function tagStocksWithAI(content, apiKey) {
 回傳 JSON 陣列，每個元素包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
-- paragraph: 包含該股票的相關段落摘要
+- paragraph: 包含該股票的完整原文段落（從文章中直接複製，不要摘要或改寫）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
+- paragraph 必須是文章中的原文，完整複製該段落，不要縮減或改寫
 - 跳過外國公司（AWS、NVIDIA、Google、Samsung 等）
 - 如果沒找到任何台灣股票，回傳空陣列 []
 
