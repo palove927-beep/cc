@@ -269,6 +269,13 @@
             color: #999;
             font-style: italic;
         }
+        .stock-highlight {
+            background-color: #fff3cd;
+            color: #d63384;
+            font-weight: 600;
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
         .article-item.clickable {
             cursor: pointer;
             transition: border-color 0.2s;
@@ -532,7 +539,11 @@
                         stocksHtml += '<span class="stock-detail-name">' + escapeHtml(s.stock_name) + '</span>';
                         stocksHtml += '</div>';
                         if (s.paragraph && s.paragraph.trim()) {
-                            stocksHtml += '<div class="stock-detail-paragraph">' + escapeHtml(s.paragraph) + '</div>';
+                            var paraText = escapeHtml(s.paragraph);
+                            // 高亮股票名稱和代號
+                            var namePattern = new RegExp('(' + escapeRegExp(s.stock_name) + '|' + s.stock_code + ')', 'g');
+                            paraText = paraText.replace(namePattern, '<span class="stock-highlight">$1</span>');
+                            stocksHtml += '<div class="stock-detail-paragraph">' + paraText + '</div>';
                         } else {
                             stocksHtml += '<div class="stock-detail-paragraph no-paragraph">無摘要段落</div>';
                         }
@@ -591,6 +602,10 @@
             var div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function escapeRegExp(str) {
+            return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
 
         function autoDetectDate() {
