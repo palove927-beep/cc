@@ -7,16 +7,17 @@
  *
  * 環境變數（在 Cloudflare Dashboard 設定）：
  *   - FUGLE_API_KEY: Fugle API 金鑰（興櫃股票用）
- *   - ADMIN_KEY: 管理員密碼（週報筆記用）
+ *   - ADMIN_KEY: 管理員密碼
+ *   - VERCEL_AI_KEY: Vercel AI Gateway 金鑰
  *
  * D1 Database:
- *   - DB: 儲存個股週報筆記 (SQLite)
+ *   - DB: 儲存文章與股票標記 (SQLite)
  *
  * API 用法：
  *   單支股票：  /api/stock?code=2330
  *   多支股票：  /api/stock?code=2330,2303,6826
- *   股票筆記：  /api/stock-notes (GET/POST/DELETE)
- *   筆記歷史：  /api/stock-notes/history?code=2059
+ *   文章管理：  /api/articles (GET/POST)
+ *   股票文章：  /api/stock-articles?code=2308
  *
  * 回傳格式：
  *   { "data": [{ "code": "2330", "name": "台積電", "price": 1810.00 }], "time": "..." }
@@ -56,25 +57,30 @@ export default {
       return corsResponse(await handleFugleCandles(url, env));
     }
 
-    // 股票筆記 API
-    if (url.pathname === "/api/stock-notes") {
+    // 文章 API
+    if (url.pathname === "/api/articles") {
       if (request.method === "GET") {
-        return corsResponse(await handleGetNotes(url, env));
+        return corsResponse(await handleGetArticles(url, env));
       }
       if (request.method === "POST") {
-        return corsResponse(await handleSaveNote(request, env));
+        return corsResponse(await handleCreateArticle(request, env));
       }
     }
 
-    // 筆記歷史查詢
-    if (url.pathname === "/api/stock-notes/history") {
-      return corsResponse(await handleGetNoteHistory(url, env));
+    // 單篇文章
+    if (url.pathname.match(/^\/api\/articles\/\d+$/)) {
+      var articleId = url.pathname.split("/").pop();
+      if (request.method === "GET") {
+        return corsResponse(await handleGetArticle(articleId, env));
+      }
+      if (request.method === "DELETE") {
+        return corsResponse(await handleDeleteArticle(articleId, request, env));
+      }
     }
 
-    // 刪除單一筆記
-    if (url.pathname.startsWith("/api/stock-notes/") && request.method === "DELETE") {
-      var id = url.pathname.replace("/api/stock-notes/", "");
-      return corsResponse(await handleDeleteNote(id, request, env));
+    // 股票相關文章
+    if (url.pathname === "/api/stock-articles") {
+      return corsResponse(await handleStockArticles(url, env));
     }
 
     return corsResponse(new Response(
@@ -545,86 +551,67 @@ function adjustForSplits(code, dateNum, price) {
 }
 
 /**
- * 取得所有股票最新筆記
- * GET /api/stock-notes
- * GET /api/stock-notes?date=2026-02-20 (指定日期)
+ * 取得文章列表
+ * GET /api/articles
+ * GET /api/articles?code=2308 (篩選含特定股票的文章)
  */
-async function handleGetNotes(url, env) {
+async function handleGetArticles(url, env) {
   if (!env || !env.DB) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
   try {
-    var dateParam = url.searchParams.get("date");
+    var code = url.searchParams.get("code");
     var result;
 
-    if (dateParam) {
-      // 查詢指定日期的筆記
-      result = await env.DB.prepare(
-        "SELECT * FROM notes WHERE report_date = ? ORDER BY stock_code"
-      ).bind(dateParam).all();
-    } else {
-      // 查詢每支股票的最新筆記
+    if (code) {
+      // 查詢含特定股票的文章
       result = await env.DB.prepare(`
-        SELECT n.* FROM notes n
-        INNER JOIN (
-          SELECT stock_code, MAX(report_date) as max_date
-          FROM notes GROUP BY stock_code
-        ) latest ON n.stock_code = latest.stock_code AND n.report_date = latest.max_date
-        ORDER BY n.stock_code
-      `).all();
+        SELECT DISTINCT a.id, a.title, a.publish_date, a.created_at
+        FROM articles a
+        INNER JOIN article_stocks ast ON a.id = ast.article_id
+        WHERE ast.stock_code = ?
+        ORDER BY a.publish_date DESC
+      `).bind(code).all();
+    } else {
+      // 查詢所有文章
+      result = await env.DB.prepare(
+        "SELECT id, title, publish_date, created_at FROM articles ORDER BY publish_date DESC"
+      ).all();
     }
 
-    // 轉換為 { code: note } 格式（兼容前端）
-    var notes = {};
-    for (var i = 0; i < result.results.length; i++) {
-      var row = result.results[i];
-      notes[row.stock_code] = {
-        id: row.id,
-        status: row.status,
-        summary: row.summary,
-        content: row.content,
-        date: row.report_date
-      };
-    }
-
-    return jsonResponse(notes);
+    return jsonResponse({ articles: result.results });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
 }
 
 /**
- * 取得某股票的歷史筆記
- * GET /api/stock-notes/history?code=2059
+ * 取得單篇文章
+ * GET /api/articles/:id
  */
-async function handleGetNoteHistory(url, env) {
+async function handleGetArticle(id, env) {
   if (!env || !env.DB) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
-  var code = url.searchParams.get("code");
-  if (!code) {
-    return jsonResponse({ error: "請提供 code 參數" }, 400);
-  }
-
   try {
-    var result = await env.DB.prepare(
-      "SELECT * FROM notes WHERE stock_code = ? ORDER BY report_date DESC LIMIT 50"
-    ).bind(code).all();
+    var article = await env.DB.prepare(
+      "SELECT * FROM articles WHERE id = ?"
+    ).bind(id).first();
+
+    if (!article) {
+      return jsonResponse({ error: "文章不存在" }, 404);
+    }
+
+    // 取得該文章的股票標記
+    var stocks = await env.DB.prepare(
+      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY stock_code"
+    ).bind(id).all();
 
     return jsonResponse({
-      stock_code: code,
-      history: result.results.map(function(row) {
-        return {
-          id: row.id,
-          status: row.status,
-          summary: row.summary,
-          content: row.content,
-          date: row.report_date,
-          created_at: row.created_at
-        };
-      })
+      article: article,
+      stocks: stocks.results
     });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
@@ -632,10 +619,10 @@ async function handleGetNoteHistory(url, env) {
 }
 
 /**
- * 儲存股票筆記
- * POST /api/stock-notes
+ * 新增文章並用 AI 標記股票
+ * POST /api/articles
  */
-async function handleSaveNote(request, env) {
+async function handleCreateArticle(request, env) {
   if (!env || !env.DB) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
@@ -648,72 +635,235 @@ async function handleSaveNote(request, env) {
 
   try {
     var body = await request.json();
-    var code = body.code;
-    var reportDate = body.date || new Date().toISOString().split("T")[0];
+    var title = body.title;
+    var content = body.content;
+    var publishDate = body.publish_date || new Date().toISOString().split("T")[0];
 
-    if (!code) {
-      return jsonResponse({ error: "請提供股票代號" }, 400);
+    if (!content) {
+      return jsonResponse({ error: "請提供文章內容" }, 400);
     }
 
-    // 檢查是否已存在同日期的筆記
-    var existing = await env.DB.prepare(
-      "SELECT id FROM notes WHERE stock_code = ? AND report_date = ?"
-    ).bind(code, reportDate).first();
-
-    if (existing) {
-      // 更新現有筆記
-      await env.DB.prepare(`
-        UPDATE notes SET status = ?, summary = ?, content = ?
-        WHERE id = ?
-      `).bind(
-        body.status || "neutral",
-        body.summary || "",
-        body.content || "",
-        existing.id
-      ).run();
-
-      return jsonResponse({ success: true, code: code, id: existing.id, action: "updated" });
+    // 1. 用 AI 標記股票
+    var stockTags = [];
+    if (env.VERCEL_AI_KEY) {
+      stockTags = await tagStocksWithAI(content, env.VERCEL_AI_KEY);
     } else {
-      // 新增筆記
-      var result = await env.DB.prepare(`
-        INSERT INTO notes (stock_code, status, summary, content, report_date)
-        VALUES (?, ?, ?, ?, ?)
-      `).bind(
-        code,
-        body.status || "neutral",
-        body.summary || "",
-        body.content || "",
-        reportDate
-      ).run();
-
-      return jsonResponse({ success: true, code: code, id: result.meta.last_row_id, action: "created" });
+      // fallback: 用 regex 解析 "股票名(代號)" 格式
+      stockTags = parseStocksFromContent(content);
     }
+
+    // 2. 儲存文章
+    var result = await env.DB.prepare(`
+      INSERT INTO articles (title, content, publish_date)
+      VALUES (?, ?, ?)
+    `).bind(
+      title || "週報 " + publishDate,
+      content,
+      publishDate
+    ).run();
+
+    var articleId = result.meta.last_row_id;
+
+    // 3. 儲存股票標記
+    for (var i = 0; i < stockTags.length; i++) {
+      var tag = stockTags[i];
+      await env.DB.prepare(`
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph)
+        VALUES (?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "").run();
+    }
+
+    return jsonResponse({
+      success: true,
+      id: articleId,
+      stocks_tagged: stockTags.length,
+      stocks: stockTags
+    });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
 }
 
 /**
- * 刪除股票筆記
- * DELETE /api/stock-notes/:id
+ * 刪除文章
+ * DELETE /api/articles/:id
  */
-async function handleDeleteNote(id, request, env) {
+async function handleDeleteArticle(id, request, env) {
   if (!env || !env.DB) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
-  // 驗證管理員密碼
   var adminKey = request.headers.get("X-Admin-Key");
   if (env.ADMIN_KEY && adminKey !== env.ADMIN_KEY) {
     return jsonResponse({ error: "未授權" }, 401);
   }
 
   try {
-    await env.DB.prepare("DELETE FROM notes WHERE id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM article_stocks WHERE article_id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM articles WHERE id = ?").bind(id).run();
     return jsonResponse({ success: true, deleted: id });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
+}
+
+/**
+ * 查詢某股票的所有相關文章段落
+ * GET /api/stock-articles?code=2308
+ */
+async function handleStockArticles(url, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
+  }
+
+  var code = url.searchParams.get("code");
+  if (!code) {
+    return jsonResponse({ error: "請提供 code 參數" }, 400);
+  }
+
+  try {
+    var result = await env.DB.prepare(`
+      SELECT
+        ast.stock_code, ast.stock_name, ast.paragraph,
+        a.id as article_id, a.title, a.publish_date
+      FROM article_stocks ast
+      INNER JOIN articles a ON ast.article_id = a.id
+      WHERE ast.stock_code = ?
+      ORDER BY a.publish_date DESC
+    `).bind(code).all();
+
+    return jsonResponse({
+      stock_code: code,
+      articles: result.results
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 用 AI 標記文章中的股票
+ * 辨識所有 "股票名(代號)" 格式的股票
+ */
+async function tagStocksWithAI(content, apiKey) {
+  try {
+    var resp = await fetch("https://gateway.ai.vercel.app/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "anthropic/claude-sonnet-4-6",
+        messages: [{
+          role: "user",
+          content: `你是股票文章標記助手。請從以下文章中找出所有提及的台灣股票。
+
+股票通常以「股票名(代號)」或「股票名（代號）」格式出現，例如：台達電(2308)、聯發科(2454)。
+也可能只出現公司名稱或代號。
+
+請回傳 JSON 陣列，每個元素包含：
+- code: 股票代號（4-6位數字）
+- name: 股票名稱
+- paragraph: 包含該股票的完整段落（從段落編號到下一個段落前，例如 "17. 台達電(2308)：..." 完整內容）
+
+只回傳 JSON 陣列，不要其他文字。如果沒找到任何股票，回傳空陣列 []
+
+## 文章內容
+${content}`
+        }],
+        max_tokens: 16000
+      })
+    });
+
+    if (!resp.ok) {
+      console.error("AI API error:", resp.status);
+      return parseStocksFromContent(content);
+    }
+
+    var data = await resp.json();
+    var text = data.choices[0].message.content.trim();
+
+    // 清理可能的 markdown code block
+    if (text.startsWith("```")) {
+      text = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "");
+    }
+
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("AI tagging error:", e);
+    return parseStocksFromContent(content);
+  }
+}
+
+/**
+ * Fallback: 用 regex 解析股票
+ */
+function parseStocksFromContent(content) {
+  var stocks = [];
+  var seen = {};
+
+  // 匹配 "股票名(代號)" 或 "股票名（代號）" 格式
+  var regex = /([^\s\d\(\)（）]{2,10})[（\(](\d{4,6})[）\)]/g;
+  var match;
+
+  while ((match = regex.exec(content)) !== null) {
+    var name = match[1];
+    var code = match[2];
+
+    if (!seen[code]) {
+      seen[code] = true;
+
+      // 找出包含該股票的段落
+      var para = extractParagraph(content, match.index);
+
+      stocks.push({
+        code: code,
+        name: name,
+        paragraph: para
+      });
+    }
+  }
+
+  return stocks;
+}
+
+/**
+ * 擷取包含指定位置的段落
+ */
+function extractParagraph(content, position) {
+  // 找段落開頭（數字. 開頭或文章開頭）
+  var start = content.lastIndexOf("\n", position);
+  if (start === -1) start = 0;
+
+  // 往前找到段落編號開頭
+  var beforeStart = content.substring(0, start);
+  var numMatch = beforeStart.match(/\n(\d+\.\s)/g);
+  if (numMatch) {
+    var lastNum = beforeStart.lastIndexOf(numMatch[numMatch.length - 1]);
+    if (lastNum !== -1 && position - lastNum < 5000) {
+      start = lastNum + 1;
+    }
+  }
+
+  // 找段落結尾（下一個數字. 或文章結尾）
+  var afterPos = content.substring(position);
+  var endMatch = afterPos.match(/\n\d+\.\s/);
+  var end;
+  if (endMatch) {
+    end = position + endMatch.index;
+  } else {
+    end = content.length;
+  }
+
+  var para = content.substring(start, end).trim();
+
+  // 限制長度
+  if (para.length > 3000) {
+    para = para.substring(0, 3000) + "...";
+  }
+
+  return para;
 }
 
 function jsonResponse(obj, status) {

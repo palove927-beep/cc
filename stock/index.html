@@ -99,56 +99,71 @@
         .refresh-btn:hover { background: #444; }
         .update-time { margin-top: 12px; font-size: 12px; color: #999; }
         .note { font-size: 12px; color: #666; margin-bottom: 16px; }
-        /* Note indicator styles */
-        .note-indicator {
+        /* Article indicator styles */
+        .article-indicator {
             display: inline-block;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
+            padding: 1px 6px;
+            border-radius: 10px;
             text-align: center;
-            line-height: 18px;
-            font-size: 11px;
+            font-size: 10px;
             cursor: pointer;
             margin-left: 4px;
+            background: #e3f2fd;
+            color: #1976d2;
         }
-        .note-positive { background: #c8e6c9; color: #2e7d32; }
-        .note-neutral { background: #fff9c4; color: #f57f17; }
-        .note-negative { background: #ffcdd2; color: #c62828; }
-        .note-row {
+        .article-indicator:hover { background: #bbdefb; }
+        .article-row {
             display: none;
         }
-        .note-row.show {
+        .article-row.show {
             display: table-row;
         }
-        .note-row td {
+        .article-row td {
             background: #fafafa;
             padding: 12px 16px;
             font-size: 13px;
             color: #555;
         }
-        .note-summary { margin-bottom: 8px; }
-        .note-content {
-            white-space: pre-wrap;
+        .article-item {
             background: #fff;
-            padding: 12px;
-            border-radius: 4px;
             border: 1px solid #eee;
-            max-height: 300px;
-            overflow-y: auto;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+        .article-item:last-child { margin-bottom: 0; }
+        .article-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .article-title {
+            font-weight: bold;
+            color: #333;
+            font-size: 13px;
+        }
+        .article-date { font-size: 11px; color: #999; }
+        .article-paragraph {
+            white-space: pre-wrap;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
             font-size: 12px;
             line-height: 1.6;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
         }
-        .note-date { font-size: 11px; color: #999; margin-top: 8px; }
-        .note-toggle {
+        .article-paragraph.show { display: block; }
+        .article-toggle {
             background: none;
             border: 1px solid #ddd;
-            padding: 4px 10px;
+            padding: 3px 8px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 12px;
-            margin-top: 8px;
+            font-size: 11px;
         }
-        .note-toggle:hover { background: #f0f0f0; }
+        .article-toggle:hover { background: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -331,7 +346,7 @@
 
         // Cloudflare Worker URL
         var WORKER_URL = "https://cc.palove927.workers.dev";
-        var stockNotes = {};
+        var stockArticles = {}; // code -> articles array
 
         function updatePrice(code, price) {
             var priceEl = document.getElementById("price-" + code);
@@ -373,20 +388,42 @@
             statusEl.textContent = "無法取得股價資料";
         }
 
-        async function fetchStockNotes() {
-            try {
-                var resp = await fetch(WORKER_URL + "/api/stock-notes");
-                if (resp.ok) {
-                    stockNotes = await resp.json();
-                    renderNoteIndicators();
+        // Fetch articles for each stock and add indicators
+        async function fetchStockArticles() {
+            // Get all stock codes from the table
+            var table = document.querySelector(".stock-table");
+            var rows = table.querySelectorAll("tr");
+            var codes = [];
+
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (row.classList.contains("category-row")) continue;
+                var cells = row.querySelectorAll("td");
+                if (cells.length >= 4) {
+                    var code = cells[3].textContent.trim();
+                    if (code && /^\d{4,6}$/.test(code)) {
+                        codes.push(code);
+                    }
                 }
-            } catch (e) {
-                console.log("Notes not available");
             }
+
+            // Fetch articles for each stock in parallel
+            var promises = codes.map(function(code) {
+                return fetch(WORKER_URL + "/api/stock-articles?code=" + code)
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(data) {
+                        if (data && data.articles && data.articles.length > 0) {
+                            stockArticles[code] = data.articles;
+                        }
+                    })
+                    .catch(function() {});
+            });
+
+            await Promise.all(promises);
+            renderArticleIndicators();
         }
 
-        function renderNoteIndicators() {
-            // Find all stock rows and add note indicators
+        function renderArticleIndicators() {
             var table = document.querySelector(".stock-table");
             var rows = table.querySelectorAll("tr");
 
@@ -397,59 +434,67 @@
                 var cells = row.querySelectorAll("td");
                 if (cells.length < 4) continue;
 
-                var codeCell = cells[3];
-                if (!codeCell) continue;
+                var code = cells[3].textContent.trim();
+                var articles = stockArticles[code];
 
-                var code = codeCell.textContent.trim();
-                var note = stockNotes[code];
-
-                if (note) {
-                    // Add indicator to stock name cell
+                if (articles && articles.length > 0) {
                     var nameCell = cells[2];
-                    var existingIndicator = nameCell.querySelector(".note-indicator");
+                    var existingIndicator = nameCell.querySelector(".article-indicator");
                     if (!existingIndicator) {
                         var indicator = document.createElement("span");
-                        indicator.className = "note-indicator note-" + note.status;
-                        indicator.textContent = note.status === "positive" ? "+" : (note.status === "negative" ? "-" : "?");
-                        indicator.title = note.summary || "點擊查看筆記";
-                        indicator.onclick = function(c) {
-                            return function() { toggleNoteRow(c); };
-                        }(code);
+                        indicator.className = "article-indicator";
+                        indicator.textContent = articles.length;
+                        indicator.title = "有 " + articles.length + " 篇相關文章";
+                        indicator.onclick = (function(c) {
+                            return function() { toggleArticleRow(c); };
+                        })(code);
                         nameCell.appendChild(indicator);
 
-                        // Create note row
-                        var noteRow = document.createElement("tr");
-                        noteRow.className = "note-row";
-                        noteRow.id = "note-row-" + code;
-                        var noteCell = document.createElement("td");
-                        noteCell.colSpan = 5;
-                        noteCell.innerHTML = '<div class="note-summary"><strong>' + escapeHtml(note.summary) + '</strong></div>' +
-                            (note.content ? '<button class="note-toggle" onclick="toggleNoteContent(\'' + code + '\')">顯示全文</button>' +
-                            '<div class="note-content" id="note-content-' + code + '" style="display:none;">' + escapeHtml(note.content) + '</div>' : '') +
-                            '<div class="note-date">更新：' + (note.date || '') + '</div>';
-                        noteRow.appendChild(noteCell);
-                        row.parentNode.insertBefore(noteRow, row.nextSibling);
+                        // Create article row
+                        var articleRow = document.createElement("tr");
+                        articleRow.className = "article-row";
+                        articleRow.id = "article-row-" + code;
+                        var articleCell = document.createElement("td");
+                        articleCell.colSpan = 5;
+
+                        var html = "";
+                        for (var j = 0; j < articles.length; j++) {
+                            var a = articles[j];
+                            html += '<div class="article-item">';
+                            html += '<div class="article-header">';
+                            html += '<span class="article-title">' + escapeHtml(a.title) + '</span>';
+                            html += '<span class="article-date">' + a.publish_date + '</span>';
+                            html += '</div>';
+                            if (a.paragraph) {
+                                html += '<button class="article-toggle" onclick="toggleParagraph(\'' + code + '-' + j + '\')">顯示段落</button>';
+                                html += '<div class="article-paragraph" id="para-' + code + '-' + j + '">' + escapeHtml(a.paragraph) + '</div>';
+                            }
+                            html += '</div>';
+                        }
+                        articleCell.innerHTML = html;
+                        articleRow.appendChild(articleCell);
+                        row.parentNode.insertBefore(articleRow, row.nextSibling);
                     }
                 }
             }
         }
 
-        function toggleNoteRow(code) {
-            var noteRow = document.getElementById("note-row-" + code);
-            if (noteRow) {
-                noteRow.classList.toggle("show");
+        function toggleArticleRow(code) {
+            var articleRow = document.getElementById("article-row-" + code);
+            if (articleRow) {
+                articleRow.classList.toggle("show");
             }
         }
 
-        function toggleNoteContent(code) {
-            var content = document.getElementById("note-content-" + code);
-            var btn = content.previousElementSibling;
-            if (content.style.display === "none") {
-                content.style.display = "block";
-                btn.textContent = "隱藏全文";
+        function toggleParagraph(id) {
+            var para = document.getElementById("para-" + id);
+            var btn = para.previousElementSibling;
+            if (para.classList.contains("show")) {
+                para.classList.remove("show");
+                btn.textContent = "顯示段落";
             } else {
-                content.style.display = "none";
-                btn.textContent = "顯示全文";
+                para.classList.add("show");
+                btn.textContent = "隱藏段落";
             }
         }
 
@@ -460,7 +505,7 @@
         }
 
         fetchStockData();
-        fetchStockNotes();
+        fetchStockArticles();
     </script>
     </div>
 </body>

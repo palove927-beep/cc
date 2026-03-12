@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>週報管理</title>
+    <title>文章管理</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -12,7 +12,7 @@
             color: #333;
             padding: 20px;
         }
-        .container { max-width: 900px; margin: 0 auto; }
+        .container { max-width: 1000px; margin: 0 auto; }
         nav { margin-bottom: 24px; }
         nav a { color: #0366d6; text-decoration: none; font-size: 14px; }
         nav a:hover { text-decoration: underline; }
@@ -45,7 +45,7 @@
             font-size: 14px;
             font-family: inherit;
         }
-        textarea { resize: vertical; min-height: 120px; }
+        textarea { resize: vertical; min-height: 300px; font-family: monospace; font-size: 13px; }
         .btn {
             padding: 10px 20px;
             background: #24292e;
@@ -56,6 +56,7 @@
             font-size: 14px;
         }
         .btn:hover { background: #444; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
         .btn-danger { background: #e53935; }
         .btn-danger:hover { background: #c62828; }
         .btn-secondary { background: #6c757d; }
@@ -64,60 +65,41 @@
             padding: 4px 12px;
             font-size: 12px;
         }
-        .notes-list { margin-top: 16px; }
-        .note-item {
+        .article-list { margin-top: 16px; }
+        .article-item {
             background: #f8f9fa;
             border: 1px solid #e9ecef;
             border-radius: 6px;
             padding: 16px;
             margin-bottom: 12px;
         }
-        .note-header {
+        .article-header {
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between;
             margin-bottom: 8px;
         }
-        .note-code {
+        .article-title {
             font-weight: bold;
             font-size: 16px;
         }
-        .note-status {
+        .article-date {
+            font-size: 12px;
+            color: #666;
+        }
+        .stock-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .stock-tag {
+            background: #e3f2fd;
+            color: #1976d2;
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 12px;
         }
-        .status-positive { background: #c8e6c9; color: #2e7d32; }
-        .status-negative { background: #ffcdd2; color: #c62828; }
-        .status-neutral { background: #fff9c4; color: #f57f17; }
-        .note-summary { font-size: 14px; color: #555; margin-bottom: 8px; }
-        .note-content {
-            font-size: 13px;
-            color: #666;
-            background: #fff;
-            padding: 12px;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            max-height: 200px;
-            overflow-y: auto;
-            display: none;
-        }
-        .note-content.show { display: block; }
-        .note-date { font-size: 12px; color: #999; }
-        .note-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        .toggle-btn {
-            background: none;
-            border: 1px solid #ddd;
-            padding: 4px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .toggle-btn:hover { background: #f0f0f0; }
         .message {
             padding: 12px 16px;
             border-radius: 4px;
@@ -126,36 +108,63 @@
         }
         .message-success { background: #c8e6c9; color: #2e7d32; }
         .message-error { background: #ffcdd2; color: #c62828; }
+        .message-info { background: #e3f2fd; color: #1565c0; }
         .auth-form {
             max-width: 300px;
             margin: 100px auto;
         }
         .hidden { display: none; }
-        .history-section {
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .article-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .preview-section {
             margin-top: 16px;
             padding-top: 16px;
             border-top: 1px solid #eee;
         }
-        .history-item {
+        .preview-stocks {
             background: #fff;
-            border: 1px solid #eee;
+            border: 1px solid #ddd;
             border-radius: 4px;
             padding: 12px;
-            margin-bottom: 8px;
+            max-height: 200px;
+            overflow-y: auto;
         }
-        .history-item .note-date {
-            font-weight: 500;
-            color: #333;
+        .preview-stock-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
         }
-        .filter-row {
+        .preview-stock-item:last-child { border-bottom: none; }
+        .preview-stock-code {
+            font-weight: bold;
+            color: #1976d2;
+        }
+        .tabs {
             display: flex;
-            gap: 12px;
+            gap: 4px;
             margin-bottom: 16px;
-            align-items: center;
         }
-        .filter-row input {
-            max-width: 200px;
+        .tab {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-size: 14px;
         }
+        .tab.active {
+            background: #fff;
+            font-weight: bold;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
@@ -173,99 +182,105 @@
 
     <!-- Main Content -->
     <div id="main-section" class="container hidden">
-        <nav><a href="/cc/">← 首頁</a> | <a href="/cc/stock/">股票即時報價</a></nav>
-        <h1>週報管理</h1>
+        <nav><a href="/cc/">首頁</a> | <a href="/cc/stock/">股票即時報價</a></nav>
+        <h1>文章管理</h1>
 
         <div id="message"></div>
 
-        <!-- Add/Edit Note Form -->
-        <div class="section">
-            <h2 id="form-title">新增個股筆記</h2>
-            <input type="hidden" id="edit-id" value="">
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('upload')">上傳文章</button>
+            <button class="tab" onclick="showTab('list')">文章列表</button>
+        </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>股票代號</label>
-                    <input type="text" id="stock-code" placeholder="例如: 2059">
+        <!-- Upload Tab -->
+        <div id="tab-upload" class="tab-content active">
+            <div class="section">
+                <h2>上傳週報文章</h2>
+                <p style="color: #666; margin-bottom: 16px; font-size: 13px;">
+                    貼上文章後，系統會自動辨識所有提及的股票（格式：股票名(代號)），並標記相關段落。
+                </p>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>文章標題</label>
+                        <input type="text" id="article-title" placeholder="例如: 定錨週報 2026-03-12">
+                    </div>
+                    <div class="form-group">
+                        <label>發布日期</label>
+                        <input type="date" id="article-date">
+                    </div>
                 </div>
+
                 <div class="form-group">
-                    <label>狀態</label>
-                    <select id="stock-status">
-                        <option value="positive">正面 (綠)</option>
-                        <option value="neutral">觀望 (黃)</option>
-                        <option value="negative">負面 (紅)</option>
-                    </select>
+                    <label>文章內容</label>
+                    <textarea id="article-content" placeholder="貼上完整週報內容..."></textarea>
                 </div>
-            </div>
 
-            <div class="form-group">
-                <label>摘要 (顯示在股票列表)</label>
-                <input type="text" id="stock-summary" placeholder="簡短描述，例如: 重返NVIDIA供應鏈">
-            </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn" onclick="uploadArticle()" id="upload-btn">上傳並標記股票</button>
+                    <button class="btn btn-secondary" onclick="clearForm()">清除</button>
+                </div>
 
-            <div class="form-group">
-                <label>完整內容 (週報原文)</label>
-                <textarea id="stock-content" placeholder="貼上週報中與該股票相關的完整段落..."></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>週報日期</label>
-                <input type="date" id="report-date">
-            </div>
-
-            <div style="display: flex; gap: 12px;">
-                <button class="btn" onclick="saveNote()">儲存</button>
-                <button class="btn btn-secondary" onclick="clearForm()">清除</button>
+                <div id="upload-result" class="preview-section hidden">
+                    <h3 style="margin-bottom: 12px;">標記結果</h3>
+                    <div id="tagged-stocks" class="preview-stocks"></div>
+                </div>
             </div>
         </div>
 
-        <!-- Existing Notes -->
-        <div class="section">
-            <h2>已儲存的筆記 (最新)</h2>
-            <div class="filter-row">
-                <button class="btn btn-secondary btn-small" onclick="loadNotes()">重新載入</button>
-                <input type="text" id="search-code" placeholder="搜尋股票代號..." onkeyup="filterNotes()">
+        <!-- List Tab -->
+        <div id="tab-list" class="tab-content">
+            <div class="section">
+                <h2>已上傳文章</h2>
+                <div class="form-row" style="margin-bottom: 16px;">
+                    <div class="form-group" style="flex: 0 0 200px;">
+                        <input type="text" id="search-stock" placeholder="搜尋股票代號..." onkeyup="searchByStock()">
+                    </div>
+                    <div class="form-group" style="flex: 0 0 auto;">
+                        <button class="btn btn-secondary btn-small" onclick="loadArticles()">重新載入</button>
+                    </div>
+                </div>
+                <div id="articles-list" class="article-list">
+                    <p class="loading">載入中...</p>
+                </div>
             </div>
-            <div id="notes-list" class="notes-list">
-                <p style="color: #999;">載入中...</p>
-            </div>
-        </div>
-
-        <!-- History Modal -->
-        <div id="history-modal" class="section hidden">
-            <h2>歷史筆記: <span id="history-code"></span></h2>
-            <button class="btn btn-secondary btn-small" onclick="closeHistory()">關閉</button>
-            <div id="history-list" class="notes-list" style="margin-top: 16px;"></div>
         </div>
     </div>
 
     <script>
         var WORKER_URL = "https://cc.palove927.workers.dev";
         var AUTH_KEY = "";
-        var allNotes = {};
+        var allArticles = [];
 
         function login() {
             var pwd = document.getElementById("auth-password").value;
             AUTH_KEY = pwd;
-            fetch(WORKER_URL + "/api/stock-notes", {
+            fetch(WORKER_URL + "/api/articles", {
                 headers: { "X-Admin-Key": AUTH_KEY }
             })
             .then(function(r) {
-                if (r.ok) {
-                    document.getElementById("auth-section").classList.add("hidden");
-                    document.getElementById("main-section").classList.remove("hidden");
-                    loadNotes();
-                    document.getElementById("report-date").valueAsDate = new Date();
-                } else {
-                    showMessage("密碼錯誤", "error");
-                }
+                document.getElementById("auth-section").classList.add("hidden");
+                document.getElementById("main-section").classList.remove("hidden");
+                document.getElementById("article-date").valueAsDate = new Date();
+                loadArticles();
             })
             .catch(function() {
                 document.getElementById("auth-section").classList.add("hidden");
                 document.getElementById("main-section").classList.remove("hidden");
-                loadNotes();
-                document.getElementById("report-date").valueAsDate = new Date();
+                document.getElementById("article-date").valueAsDate = new Date();
+                loadArticles();
             });
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll(".tab").forEach(function(t) { t.classList.remove("active"); });
+            document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });
+            document.querySelector(".tab[onclick*='" + tabName + "']").classList.add("active");
+            document.getElementById("tab-" + tabName).classList.add("active");
+
+            if (tabName === "list") {
+                loadArticles();
+            }
         }
 
         function showMessage(text, type) {
@@ -273,201 +288,144 @@
             msgEl.className = "message message-" + type;
             msgEl.textContent = text;
             msgEl.style.display = "block";
-            setTimeout(function() { msgEl.style.display = "none"; }, 3000);
+            setTimeout(function() { msgEl.style.display = "none"; }, 5000);
         }
 
-        function loadNotes() {
-            fetch(WORKER_URL + "/api/stock-notes", {
-                headers: { "X-Admin-Key": AUTH_KEY }
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                allNotes = data;
-                renderNotes(data);
-            })
-            .catch(function() {
-                document.getElementById("notes-list").innerHTML = "<p style='color:#999;'>尚無筆記，或 D1 尚未設定</p>";
-            });
-        }
+        function uploadArticle() {
+            var title = document.getElementById("article-title").value.trim();
+            var content = document.getElementById("article-content").value.trim();
+            var date = document.getElementById("article-date").value;
 
-        function filterNotes() {
-            var search = document.getElementById("search-code").value.toLowerCase();
-            var filtered = {};
-            for (var code in allNotes) {
-                if (code.toLowerCase().indexOf(search) !== -1) {
-                    filtered[code] = allNotes[code];
-                }
-            }
-            renderNotes(filtered);
-        }
-
-        function renderNotes(notes) {
-            var container = document.getElementById("notes-list");
-            if (!notes || Object.keys(notes).length === 0) {
-                container.innerHTML = "<p style='color:#999;'>尚無筆記</p>";
+            if (!content) {
+                showMessage("請輸入文章內容", "error");
                 return;
             }
 
-            var statusLabels = {
-                positive: "正面",
-                neutral: "觀望",
-                negative: "負面"
-            };
+            var btn = document.getElementById("upload-btn");
+            btn.disabled = true;
+            btn.textContent = "處理中...";
 
-            var html = "";
-            for (var code in notes) {
-                var note = notes[code];
-                html += '<div class="note-item" data-code="' + code + '" data-id="' + note.id + '">';
-                html += '<div class="note-header">';
-                html += '<span class="note-code">' + code + '</span>';
-                html += '<span class="note-status status-' + note.status + '">' + statusLabels[note.status] + '</span>';
-                html += '<span class="note-date">' + (note.date || "") + '</span>';
-                html += '</div>';
-                html += '<div class="note-summary">' + escapeHtml(note.summary || "") + '</div>';
-                html += '<button class="toggle-btn" onclick="toggleContent(this)">顯示全文</button>';
-                html += '<div class="note-content">' + escapeHtml(note.content || "") + '</div>';
-                html += '<div class="note-actions">';
-                html += '<button class="btn btn-secondary btn-small" onclick="viewHistory(\'' + code + '\')">歷史</button>';
-                html += '<button class="btn btn-secondary btn-small" onclick="editNote(\'' + code + '\')">編輯</button>';
-                html += '<button class="btn btn-danger btn-small" onclick="deleteNote(' + note.id + ', \'' + code + '\')">刪除</button>';
-                html += '</div>';
-                html += '</div>';
-            }
-            container.innerHTML = html;
-        }
-
-        function escapeHtml(text) {
-            var div = document.createElement("div");
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function toggleContent(btn) {
-            var content = btn.nextElementSibling;
-            if (content.classList.contains("show")) {
-                content.classList.remove("show");
-                btn.textContent = "顯示全文";
-            } else {
-                content.classList.add("show");
-                btn.textContent = "隱藏全文";
-            }
-        }
-
-        function viewHistory(code) {
-            document.getElementById("history-code").textContent = code;
-            document.getElementById("history-modal").classList.remove("hidden");
-            document.getElementById("history-list").innerHTML = "<p style='color:#999;'>載入中...</p>";
-
-            fetch(WORKER_URL + "/api/stock-notes/history?code=" + code, {
-                headers: { "X-Admin-Key": AUTH_KEY }
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                renderHistory(data.history || []);
-            })
-            .catch(function() {
-                document.getElementById("history-list").innerHTML = "<p style='color:#999;'>無法載入歷史</p>";
-            });
-        }
-
-        function renderHistory(history) {
-            var container = document.getElementById("history-list");
-            if (!history || history.length === 0) {
-                container.innerHTML = "<p style='color:#999;'>尚無歷史記錄</p>";
-                return;
-            }
-
-            var statusLabels = {
-                positive: "正面",
-                neutral: "觀望",
-                negative: "負面"
-            };
-
-            var html = "";
-            for (var i = 0; i < history.length; i++) {
-                var note = history[i];
-                html += '<div class="history-item">';
-                html += '<div class="note-header">';
-                html += '<span class="note-date">' + note.date + '</span>';
-                html += '<span class="note-status status-' + note.status + '">' + statusLabels[note.status] + '</span>';
-                html += '</div>';
-                html += '<div class="note-summary">' + escapeHtml(note.summary || "") + '</div>';
-                if (note.content) {
-                    html += '<button class="toggle-btn" onclick="toggleContent(this)">顯示全文</button>';
-                    html += '<div class="note-content">' + escapeHtml(note.content) + '</div>';
-                }
-                html += '</div>';
-            }
-            container.innerHTML = html;
-        }
-
-        function closeHistory() {
-            document.getElementById("history-modal").classList.add("hidden");
-        }
-
-        function saveNote() {
-            var code = document.getElementById("stock-code").value.trim();
-            var status = document.getElementById("stock-status").value;
-            var summary = document.getElementById("stock-summary").value.trim();
-            var content = document.getElementById("stock-content").value.trim();
-            var date = document.getElementById("report-date").value;
-
-            if (!code) {
-                showMessage("請輸入股票代號", "error");
-                return;
-            }
-
-            var noteData = {
-                code: code,
-                status: status,
-                summary: summary,
-                content: content,
-                date: date
-            };
-
-            fetch(WORKER_URL + "/api/stock-notes", {
+            fetch(WORKER_URL + "/api/articles", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "X-Admin-Key": AUTH_KEY
                 },
-                body: JSON.stringify(noteData)
+                body: JSON.stringify({
+                    title: title || "週報 " + date,
+                    content: content,
+                    publish_date: date
+                })
             })
             .then(function(r) { return r.json(); })
             .then(function(result) {
+                btn.disabled = false;
+                btn.textContent = "上傳並標記股票";
+
                 if (result.success) {
-                    var action = result.action === "updated" ? "更新" : "新增";
-                    showMessage(action + "成功", "success");
-                    clearForm();
-                    loadNotes();
+                    showMessage("上傳成功！已標記 " + result.stocks_tagged + " 支股票", "success");
+                    renderTaggedStocks(result.stocks || []);
+                    document.getElementById("upload-result").classList.remove("hidden");
                 } else {
-                    showMessage("儲存失敗: " + (result.error || "未知錯誤"), "error");
+                    showMessage("上傳失敗: " + (result.error || "未知錯誤"), "error");
                 }
             })
             .catch(function(e) {
-                showMessage("儲存失敗: " + e.message, "error");
+                btn.disabled = false;
+                btn.textContent = "上傳並標記股票";
+                showMessage("上傳失敗: " + e.message, "error");
             });
         }
 
-        function editNote(code) {
-            var note = allNotes[code];
-            if (!note) return;
+        function renderTaggedStocks(stocks) {
+            var container = document.getElementById("tagged-stocks");
+            if (!stocks || stocks.length === 0) {
+                container.innerHTML = "<p style='color:#999;'>未找到任何股票標記</p>";
+                return;
+            }
 
-            document.getElementById("stock-code").value = code;
-            document.getElementById("stock-summary").value = note.summary || "";
-            document.getElementById("stock-content").value = note.content || "";
-            document.getElementById("report-date").value = note.date || "";
-            document.getElementById("stock-status").value = note.status || "neutral";
-            document.getElementById("form-title").textContent = "編輯 " + code;
-            document.getElementById("edit-id").value = note.id;
-
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            var html = "";
+            for (var i = 0; i < stocks.length; i++) {
+                var s = stocks[i];
+                html += '<div class="preview-stock-item">';
+                html += '<span class="preview-stock-code">' + s.name + ' (' + s.code + ')</span>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
         }
 
-        function deleteNote(id, code) {
-            if (!confirm("確定要刪除 " + code + " 的這筆筆記嗎？")) return;
+        function loadArticles() {
+            var searchCode = document.getElementById("search-stock").value.trim();
+            var url = WORKER_URL + "/api/articles";
+            if (searchCode) {
+                url += "?code=" + searchCode;
+            }
 
-            fetch(WORKER_URL + "/api/stock-notes/" + id, {
+            fetch(url, {
+                headers: { "X-Admin-Key": AUTH_KEY }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allArticles = data.articles || [];
+                renderArticles(allArticles);
+            })
+            .catch(function() {
+                document.getElementById("articles-list").innerHTML = "<p style='color:#999;'>無法載入文章</p>";
+            });
+        }
+
+        function searchByStock() {
+            loadArticles();
+        }
+
+        function renderArticles(articles) {
+            var container = document.getElementById("articles-list");
+            if (!articles || articles.length === 0) {
+                container.innerHTML = "<p style='color:#999;'>尚無文章</p>";
+                return;
+            }
+
+            var html = "";
+            for (var i = 0; i < articles.length; i++) {
+                var a = articles[i];
+                html += '<div class="article-item" data-id="' + a.id + '">';
+                html += '<div class="article-header">';
+                html += '<span class="article-title">' + escapeHtml(a.title) + '</span>';
+                html += '<span class="article-date">' + a.publish_date + '</span>';
+                html += '</div>';
+                html += '<div class="article-actions">';
+                html += '<button class="btn btn-secondary btn-small" onclick="viewArticle(' + a.id + ')">查看</button>';
+                html += '<button class="btn btn-danger btn-small" onclick="deleteArticle(' + a.id + ')">刪除</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        function viewArticle(id) {
+            fetch(WORKER_URL + "/api/articles/" + id, {
+                headers: { "X-Admin-Key": AUTH_KEY }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var article = data.article;
+                var stocks = data.stocks || [];
+
+                var stocksHtml = stocks.map(function(s) {
+                    return s.stock_name + "(" + s.stock_code + ")";
+                }).join(", ");
+
+                alert("標題: " + article.title + "\n日期: " + article.publish_date + "\n\n標記股票:\n" + stocksHtml);
+            })
+            .catch(function(e) {
+                showMessage("無法載入文章: " + e.message, "error");
+            });
+        }
+
+        function deleteArticle(id) {
+            if (!confirm("確定要刪除這篇文章嗎？")) return;
+
+            fetch(WORKER_URL + "/api/articles/" + id, {
                 method: "DELETE",
                 headers: { "X-Admin-Key": AUTH_KEY }
             })
@@ -475,7 +433,7 @@
             .then(function(result) {
                 if (result.success) {
                     showMessage("已刪除", "success");
-                    loadNotes();
+                    loadArticles();
                 } else {
                     showMessage("刪除失敗", "error");
                 }
@@ -486,13 +444,16 @@
         }
 
         function clearForm() {
-            document.getElementById("stock-code").value = "";
-            document.getElementById("stock-status").value = "positive";
-            document.getElementById("stock-summary").value = "";
-            document.getElementById("stock-content").value = "";
-            document.getElementById("report-date").valueAsDate = new Date();
-            document.getElementById("form-title").textContent = "新增個股筆記";
-            document.getElementById("edit-id").value = "";
+            document.getElementById("article-title").value = "";
+            document.getElementById("article-content").value = "";
+            document.getElementById("article-date").valueAsDate = new Date();
+            document.getElementById("upload-result").classList.add("hidden");
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         document.getElementById("auth-password").addEventListener("keypress", function(e) {

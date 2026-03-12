@@ -16,4 +16,5 @@ database_id = "25569f6a-7ab9-41b4-a191-90f96e0a5624"
 
 # Environment variables (set in Cloudflare Dashboard):
 # - FUGLE_API_KEY: Fugle API key
-# - ADMIN_KEY: Admin password for managing notes
+# - ADMIN_KEY: Admin password for managing articles
+# - VERCEL_AI_KEY: Vercel AI Gateway API key (for stock tagging)
