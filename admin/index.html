@@ -220,7 +220,7 @@
             border: 1px solid #e9ecef;
             border-radius: 6px;
             padding: 16px;
-            max-height: 200px;
+            max-height: 400px;
             overflow-y: auto;
             font-size: 14px;
             line-height: 1.6;
@@ -505,11 +505,8 @@
                 document.getElementById("modal-title").textContent = article.title;
                 document.getElementById("modal-meta").textContent = "發布日期: " + article.publish_date;
 
-                // Set article content preview
+                // Set article content (full)
                 var content = article.content || "";
-                if (content.length > 1000) {
-                    content = content.substring(0, 1000) + "...";
-                }
                 document.getElementById("modal-content").textContent = content;
 
                 // Render stocks with paragraphs
