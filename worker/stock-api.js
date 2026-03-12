@@ -641,7 +641,7 @@ async function handleGetArticle(id, env) {
 
     // 取得該文章的股票標記
     var stocks = await env.DB.prepare(
-      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY position, id"
+      "SELECT stock_code, stock_name, paragraph, eps_2025, eps_2026, eps_2027 FROM article_stocks WHERE article_id = ? ORDER BY position, id"
     ).bind(id).all();
 
     return jsonResponse({
@@ -711,10 +711,16 @@ async function handleCreateArticle(request, env) {
 
     for (var i = 0; i < stockTags.length; i++) {
       var tag = stockTags[i];
+      // 解析 EPS 財測
+      var eps = parseEPS(tag.paragraph || "");
+      tag.eps_2025 = eps.eps_2025;
+      tag.eps_2026 = eps.eps_2026;
+      tag.eps_2027 = eps.eps_2027;
+
       await env.DB.prepare(`
-        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position)
-        VALUES (?, ?, ?, ?, ?)
-      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position, eps_2025, eps_2026, eps_2027)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i, eps.eps_2025, eps.eps_2026, eps.eps_2027).run();
     }
 
     return jsonResponse({
@@ -764,6 +770,7 @@ async function handleStockArticles(url, env) {
     var result = await env.DB.prepare(`
       SELECT
         ast.stock_code, ast.stock_name, ast.paragraph,
+        ast.eps_2025, ast.eps_2026, ast.eps_2027,
         a.id as article_id, a.title, a.publish_date
       FROM article_stocks ast
       INNER JOIN articles a ON ast.article_id = a.id
@@ -1052,6 +1059,55 @@ function extractParagraph(content, position) {
   }
 
   return para;
+}
+
+/**
+ * 從段落中解析 EPS 財測
+ * 支援格式：
+ * - 2026/2027年財測EPS上修至10.60/17.36元
+ * - 2025/2026/2027年EPS為5.00/6.50/8.00元
+ * - 2026年EPS 10.5元
+ */
+function parseEPS(text) {
+  var result = { eps_2025: null, eps_2026: null, eps_2027: null };
+  if (!text) return result;
+
+  // 模式1: 2025/2026/2027年...EPS...至/為X.XX/Y.YY/Z.ZZ元
+  var match3 = text.match(/2025\s*[\/／]\s*2026\s*[\/／]\s*2027\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match3) {
+    result.eps_2025 = parseFloat(match3[1]);
+    result.eps_2026 = parseFloat(match3[2]);
+    result.eps_2027 = parseFloat(match3[3]);
+    return result;
+  }
+
+  // 模式2: 2026/2027年...EPS...至/為X.XX/Y.YY元
+  var match2 = text.match(/2026\s*[\/／]\s*2027\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match2) {
+    result.eps_2026 = parseFloat(match2[1]);
+    result.eps_2027 = parseFloat(match2[2]);
+    return result;
+  }
+
+  // 模式3: 2025/2026年...EPS...至/為X.XX/Y.YY元
+  var match25_26 = text.match(/2025\s*[\/／]\s*2026\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match25_26) {
+    result.eps_2025 = parseFloat(match25_26[1]);
+    result.eps_2026 = parseFloat(match25_26[2]);
+    return result;
+  }
+
+  // 模式4: 單一年度 2026年EPS X.XX元 或 2026年...EPS...X.XX元
+  var single2025 = text.match(/2025\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2025) result.eps_2025 = parseFloat(single2025[1]);
+
+  var single2026 = text.match(/2026\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2026) result.eps_2026 = parseFloat(single2026[1]);
+
+  var single2027 = text.match(/2027\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2027) result.eps_2027 = parseFloat(single2027[1]);
+
+  return result;
 }
 
 function jsonResponse(obj, status) {
