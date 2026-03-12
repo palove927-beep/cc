@@ -933,31 +933,36 @@ function parseStocksFromContent(content) {
 
 /**
  * 擷取包含指定位置的段落
- * 段落分隔：空行（\n\n）或「數字. 」格式
+ * 段落分隔：空行（\n\n）、「數字. 」、「字母. 」格式
  */
 function extractParagraph(content, position) {
   var beforePos = content.substring(0, position);
   var afterPos = content.substring(position);
 
-  // 往前找段落開頭：最近的空行或「數字. 」
+  // 段落分隔模式：數字. 或 字母.（如 1. 2. a. b.）
+  var paraStartPattern = /\n([0-9]+|[a-z])\.\s/gi;
+
+  // 往前找段落開頭
   var start = 0;
 
   // 找最近的空行
   var emptyLineIdx = beforePos.lastIndexOf("\n\n");
   if (emptyLineIdx !== -1) {
-    start = emptyLineIdx + 2; // 跳過空行
+    start = emptyLineIdx + 2;
   }
 
-  // 找最近的「數字. 」（可能比空行更近）
-  var numMatch = beforePos.match(/(?:^|\n)(\d+)\.\s(?!.*\n\n)/);
-  if (numMatch) {
-    var numStart = beforePos.lastIndexOf("\n" + numMatch[1] + ".");
-    if (numStart === -1) numStart = 0;
-    else numStart += 1; // 跳過換行
-    if (numStart > start) start = numStart;
+  // 找最近的「數字. 」或「字母. 」
+  var match;
+  var lastParaStart = -1;
+  paraStartPattern.lastIndex = 0;
+  while ((match = paraStartPattern.exec(beforePos)) !== null) {
+    lastParaStart = match.index + 1; // 跳過換行
+  }
+  if (lastParaStart > start) {
+    start = lastParaStart;
   }
 
-  // 往後找段落結尾：最近的空行或「數字. 」
+  // 往後找段落結尾
   var end = content.length;
 
   // 找最近的空行
@@ -966,10 +971,10 @@ function extractParagraph(content, position) {
     end = position + emptyLineEnd;
   }
 
-  // 找最近的「數字. 」
-  var numEndMatch = afterPos.match(/\n\d+\.\s/);
-  if (numEndMatch && position + numEndMatch.index < end) {
-    end = position + numEndMatch.index;
+  // 找最近的「數字. 」或「字母. 」
+  var endMatch = afterPos.match(/\n([0-9]+|[a-z])\.\s/i);
+  if (endMatch && position + endMatch.index < end) {
+    end = position + endMatch.index;
   }
 
   var para = content.substring(start, end).trim();
