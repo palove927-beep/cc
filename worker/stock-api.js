@@ -759,7 +759,7 @@ async function handleStockArticles(url, env) {
  */
 async function tagStocksWithAI(content, apiKey) {
   try {
-    var resp = await fetch("https://gateway.ai.vercel.app/v1/chat/completions", {
+    var resp = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + apiKey,
@@ -830,7 +830,7 @@ async function testAITagging(content, apiKey) {
   }
 
   try {
-    var resp = await fetch("https://gateway.ai.vercel.app/v1/chat/completions", {
+    var resp = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + apiKey,
