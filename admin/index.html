@@ -186,10 +186,10 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>文章標題</label>
-                        <input type="text" id="article-title" placeholder="例如: 定錨週報 2026-03-12">
+                        <input type="text" id="article-title" placeholder="例如: 20260312 台股產業週報" oninput="autoDetectDate()">
                     </div>
                     <div class="form-group">
-                        <label>發布日期</label>
+                        <label>發布日期 <span id="date-auto-hint" style="color:#28a745;font-size:12px;"></span></label>
                         <input type="date" id="article-date">
                     </div>
                 </div>
@@ -410,6 +410,34 @@
             var div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function autoDetectDate() {
+            var title = document.getElementById("article-title").value;
+            var hint = document.getElementById("date-auto-hint");
+            var dateInput = document.getElementById("article-date");
+
+            // Match patterns: 20260308, 2026/03/08, 2026-03-08
+            var match = title.match(/^(\d{4})(\d{2})(\d{2})/);
+            if (!match) {
+                match = title.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+            }
+
+            if (match) {
+                var year = match[1];
+                var month = match[2].padStart(2, '0');
+                var day = match[3].padStart(2, '0');
+                var dateStr = year + "-" + month + "-" + day;
+
+                // Validate date
+                var testDate = new Date(dateStr);
+                if (!isNaN(testDate.getTime())) {
+                    dateInput.value = dateStr;
+                    hint.textContent = "(自動偵測)";
+                    return;
+                }
+            }
+            hint.textContent = "";
         }
 
         // Initialize on page load
