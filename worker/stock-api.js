@@ -743,7 +743,7 @@ async function tagStocksWithAI(content, apiKey) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4-6",
+        model: "google/gemini-3-flash",
         messages: [{
           role: "user",
           content: `你是股票文章標記助手。請從以下文章中找出所有提及的台灣股票。
