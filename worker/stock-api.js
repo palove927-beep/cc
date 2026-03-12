@@ -967,81 +967,88 @@ function extractParagraph(content, position) {
   var beforePos = content.substring(0, position);
   var afterPos = content.substring(position);
 
-  // 段落分隔模式：只用數字.（如 1. 2. 3.）
-  var paraStartPattern = /\n(\d+)\.\s/g;
-
   // 往前找段落開頭
   var start = 0;
+  var startedWithNumber = false;
 
-  // 找最近的空行
-  var emptyLineIdx = beforePos.lastIndexOf("\n\n");
-  if (emptyLineIdx !== -1) {
-    start = emptyLineIdx + 2;
-  }
-
-  // 找最近的「數字. 」
+  // 找最近的「數字. 」（如 1. 2. 3.）- 優先
+  var paraStartPattern = /\n(\d+)\.\s/g;
   var match;
   var lastParaStart = -1;
-  paraStartPattern.lastIndex = 0;
   while ((match = paraStartPattern.exec(beforePos)) !== null) {
     lastParaStart = match.index + 1; // 跳過換行
   }
-  if (lastParaStart > start) {
+  // 也檢查文章開頭是否為數字.
+  if (beforePos.match(/^\d+\.\s/)) {
+    lastParaStart = 0;
+  }
+  if (lastParaStart !== -1) {
     start = lastParaStart;
+    startedWithNumber = true;
   }
 
-  // 找最近的標題行作為段落開頭（必須在行首，不能在括號內）
-  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
-  for (var i = 0; i < titlePatterns.length; i++) {
-    var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
-    // 也檢查文章開頭
-    if (titleIdx === -1 && beforePos.indexOf(titlePatterns[i]) === 0) {
-      titleIdx = 0;
+  // 如果沒找到數字開頭，找標題行或空行
+  if (!startedWithNumber) {
+    // 找最近的空行
+    var emptyLineIdx = beforePos.lastIndexOf("\n\n");
+    if (emptyLineIdx !== -1) {
+      start = emptyLineIdx + 2;
     }
-    if (titleIdx !== -1) {
-      var titleStart = titleIdx;
-      if (beforePos[titleIdx] === '\n') titleStart += 1;
-      if (titleStart > start) {
-        start = titleStart;
+
+    // 找最近的標題行作為段落開頭（必須在行首）
+    var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
+    for (var i = 0; i < titlePatterns.length; i++) {
+      var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
+      if (titleIdx === -1 && beforePos.indexOf(titlePatterns[i]) === 0) {
+        titleIdx = 0;
+      }
+      if (titleIdx !== -1) {
+        var titleStart = titleIdx;
+        if (beforePos[titleIdx] === '\n') titleStart += 1;
+        if (titleStart > start) {
+          start = titleStart;
+        }
       }
     }
-  }
-  // 「備註：」只有在行首才當作分隔（避免括號內的備註）
-  var remarkIdx = beforePos.lastIndexOf('\n備註：');
-  if (remarkIdx === -1 && beforePos.indexOf('備註：') === 0) remarkIdx = 0;
-  if (remarkIdx !== -1) {
-    var remarkStart = remarkIdx === 0 ? 0 : remarkIdx + 1;
-    if (remarkStart > start) {
-      start = remarkStart;
+    // 「備註：」只有在行首才當作分隔
+    var remarkIdx = beforePos.lastIndexOf('\n備註：');
+    if (remarkIdx === -1 && beforePos.indexOf('備註：') === 0) remarkIdx = 0;
+    if (remarkIdx !== -1) {
+      var remarkStart = remarkIdx === 0 ? 0 : remarkIdx + 1;
+      if (remarkStart > start) {
+        start = remarkStart;
+      }
     }
   }
 
   // 往後找段落結尾
   var end = content.length;
 
-  // 找最近的空行
-  var emptyLineEnd = afterPos.indexOf("\n\n");
-  if (emptyLineEnd !== -1) {
-    end = position + emptyLineEnd;
-  }
-
-  // 找最近的「數字. 」
+  // 找最近的「數字. 」（如下一個 3. 4.）
   var endMatch = afterPos.match(/\n\d+\.\s/);
-  if (endMatch && position + endMatch.index < end) {
+  if (endMatch) {
     end = position + endMatch.index;
   }
 
-  // 找最近的標題行（排除 a. b. c. 開頭的子項目，備註只在行首才算）
+  // 找最近的標題行
   var titleMatch = afterPos.match(/\n(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
   if (titleMatch && position + titleMatch.index < end) {
     end = position + titleMatch.index;
   }
 
+  // 只有在非數字開頭的段落才用空行分隔
+  if (!startedWithNumber) {
+    var emptyLineEnd = afterPos.indexOf("\n\n");
+    if (emptyLineEnd !== -1 && position + emptyLineEnd < end) {
+      end = position + emptyLineEnd;
+    }
+  }
+
   var para = content.substring(start, end).trim();
 
   // 限制長度
-  if (para.length > 3000) {
-    para = para.substring(0, 3000) + "...";
+  if (para.length > 5000) {
+    para = para.substring(0, 5000) + "...";
   }
 
   return para;
