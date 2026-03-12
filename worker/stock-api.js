@@ -990,17 +990,29 @@ function extractParagraph(content, position) {
     start = lastParaStart;
   }
 
-  // 找最近的標題行作為段落開頭
-  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤', '備註：'];
+  // 找最近的標題行作為段落開頭（必須在行首，不能在括號內）
+  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
   for (var i = 0; i < titlePatterns.length; i++) {
     var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
-    if (titleIdx === -1) titleIdx = beforePos.lastIndexOf(titlePatterns[i]);
+    // 也檢查文章開頭
+    if (titleIdx === -1 && beforePos.indexOf(titlePatterns[i]) === 0) {
+      titleIdx = 0;
+    }
     if (titleIdx !== -1) {
       var titleStart = titleIdx;
       if (beforePos[titleIdx] === '\n') titleStart += 1;
       if (titleStart > start) {
         start = titleStart;
       }
+    }
+  }
+  // 「備註：」只有在行首才當作分隔（避免括號內的備註）
+  var remarkIdx = beforePos.lastIndexOf('\n備註：');
+  if (remarkIdx === -1 && beforePos.indexOf('備註：') === 0) remarkIdx = 0;
+  if (remarkIdx !== -1) {
+    var remarkStart = remarkIdx === 0 ? 0 : remarkIdx + 1;
+    if (remarkStart > start) {
+      start = remarkStart;
     }
   }
 
@@ -1019,8 +1031,8 @@ function extractParagraph(content, position) {
     end = position + endMatch.index;
   }
 
-  // 找最近的標題行（排除 a. b. c. 開頭的子項目）
-  var titleMatch = afterPos.match(/\n(?![a-z]\.\s)(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
+  // 找最近的標題行（排除 a. b. c. 開頭的子項目，備註只在行首才算）
+  var titleMatch = afterPos.match(/\n(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
   if (titleMatch && position + titleMatch.index < end) {
     end = position + titleMatch.index;
   }
