@@ -83,6 +83,18 @@ export default {
       return corsResponse(await handleStockArticles(url, env));
     }
 
+    // 系統狀態檢查
+    if (url.pathname === "/api/status") {
+      return corsResponse(jsonResponse({
+        status: "ok",
+        env: {
+          VERCEL_AI_KEY: env.VERCEL_AI_KEY ? "已設定" : "未設定",
+          FUGLE_API_KEY: env.FUGLE_API_KEY ? "已設定" : "未設定",
+          DB: env.DB ? "已連接" : "未連接"
+        }
+      }));
+    }
+
     return corsResponse(new Response(
       JSON.stringify({ error: "請使用 /api/stock?code=2330" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
