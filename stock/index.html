@@ -164,6 +164,13 @@
             font-size: 11px;
         }
         .article-toggle:hover { background: #f0f0f0; }
+        .stock-highlight {
+            background-color: #fff3cd;
+            color: #d63384;
+            font-weight: 600;
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -458,6 +465,7 @@
                         articleCell.colSpan = 5;
 
                         var html = "";
+                        var stockName = cells[2].childNodes[0].textContent.trim().replace(/\s*\*$/, ''); // 去掉 * 符號
                         for (var j = 0; j < articles.length; j++) {
                             var a = articles[j];
                             html += '<div class="article-item">';
@@ -466,8 +474,13 @@
                             html += '<span class="article-date">' + a.publish_date + '</span>';
                             html += '</div>';
                             if (a.paragraph) {
-                                html += '<button class="article-toggle" onclick="toggleParagraph(\'' + code + '-' + j + '\')">顯示段落</button>';
-                                html += '<div class="article-paragraph" id="para-' + code + '-' + j + '">' + escapeHtml(a.paragraph) + '</div>';
+                                // 第一個（最新）自動展開
+                                var isFirst = (j === 0);
+                                html += '<button class="article-toggle" onclick="toggleParagraph(\'' + code + '-' + j + '\')">' + (isFirst ? '隱藏段落' : '顯示段落') + '</button>';
+                                // 高亮股票名稱和代號
+                                var paraHtml = escapeHtml(a.paragraph);
+                                paraHtml = highlightStock(paraHtml, stockName, code);
+                                html += '<div class="article-paragraph' + (isFirst ? ' show' : '') + '" id="para-' + code + '-' + j + '">' + paraHtml + '</div>';
                             }
                             html += '</div>';
                         }
@@ -502,6 +515,16 @@
             var div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function escapeRegExp(str) {
+            return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function highlightStock(html, stockName, code) {
+            // 高亮股票名稱和代號
+            var pattern = new RegExp('(' + escapeRegExp(stockName) + '|' + code + ')', 'g');
+            return html.replace(pattern, '<span class="stock-highlight">$1</span>');
         }
 
         fetchStockData();
