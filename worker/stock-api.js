@@ -95,11 +95,10 @@ export default {
       }));
     }
 
-    // AI 標記測試
-    if (url.pathname === "/api/test-ai" && request.method === "POST") {
+    // AI 標記測試（支援 GET）
+    if (url.pathname === "/api/test-ai") {
       try {
-        var body = await request.json();
-        var testContent = body.content || "國巨於2026年3月調漲鉭質電容報價15~20%。台半、德微預計調漲產品報價。";
+        var testContent = url.searchParams.get("q") || "國巨於2026年3月調漲鉭質電容報價15~20%。台半、德微預計調漲產品報價。";
         var result = await testAITagging(testContent, env.VERCEL_AI_KEY);
         return corsResponse(jsonResponse(result));
       } catch (e) {
