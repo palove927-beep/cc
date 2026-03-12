@@ -822,12 +822,23 @@ ${content}`
       var stock = stocks[i];
       if (!seen[stock.code]) {
         seen[stock.code] = true;
-        // 在文章中找到該股票的位置
-        var searchPattern = stock.name + "(" + stock.code + ")";
-        var searchPattern2 = stock.name + "（" + stock.code + "）";
-        var pos = content.indexOf(searchPattern);
-        if (pos === -1) pos = content.indexOf(searchPattern2);
+        // 在文章中找到該股票的位置（多種搜尋模式）
+        var pos = -1;
+        // 1. 完整格式：公司名(代號)
+        if (pos === -1) pos = content.indexOf(stock.name + "(" + stock.code + ")");
+        if (pos === -1) pos = content.indexOf(stock.name + "（" + stock.code + "）");
+        // 2. 只搜尋 (代號) 格式（文章中可能用不同名稱）
+        if (pos === -1) pos = content.indexOf("(" + stock.code + ")");
+        if (pos === -1) pos = content.indexOf("（" + stock.code + "）");
+        // 3. 搜尋代號本身
         if (pos === -1) pos = content.indexOf(stock.code);
+        // 4. 搜尋公司名稱
+        if (pos === -1) pos = content.indexOf(stock.name);
+        // 5. 名稱去掉 -KY 等後綴再搜尋
+        if (pos === -1 && stock.name.indexOf("-") !== -1) {
+          var baseName = stock.name.split("-")[0];
+          pos = content.indexOf(baseName);
+        }
 
         var paragraph = pos !== -1 ? extractParagraph(content, pos) : "";
         result.push({
