@@ -1035,12 +1035,18 @@ function extractParagraph(content, position) {
   var start = 0;
   var startedWithNumber = false;
 
-  // 找最近的「數字. 」（如 1. 2. 3.）- 優先
-  var paraStartPattern = /\n(\d+)\.\s/g;
+  // 找最近的「數字. 」（如 1. 2. 3.）
+  // 支援：換行後、空格後、或文章開頭
+  var paraStartPattern = /(?:^|\n|\s)(\d+)\.\s/g;
   var match;
   var lastParaStart = -1;
   while ((match = paraStartPattern.exec(beforePos)) !== null) {
-    lastParaStart = match.index + 1; // 跳過換行
+    // 計算實際數字開始的位置
+    var numStart = match.index;
+    if (beforePos[numStart] === '\n' || beforePos[numStart] === ' ' || beforePos[numStart] === '\t') {
+      numStart += 1;
+    }
+    lastParaStart = numStart;
   }
   // 也檢查文章開頭是否為數字.
   if (beforePos.match(/^\d+\.\s/)) {
@@ -1089,7 +1095,8 @@ function extractParagraph(content, position) {
   var end = content.length;
 
   // 找最近的「數字. 」（如下一個 3. 4.）
-  var endMatch = afterPos.match(/\n\d+\.\s/);
+  // 支援換行後或空格後
+  var endMatch = afterPos.match(/(?:\n|\s)(\d+)\.\s/);
   if (endMatch) {
     end = position + endMatch.index;
   }
