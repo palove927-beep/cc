@@ -663,7 +663,7 @@
             var items = clipboardData.items;
             var imageFiles = [];
 
-            // 收集剪貼簿中的圖片檔案
+            // 收集所有圖片
             for (var i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
                     var file = items[i].getAsFile();
@@ -671,30 +671,17 @@
                 }
             }
 
-            // 取得純文字和 HTML
-            var pastedText = clipboardData.getData('text/plain') || '';
-            var pastedHtml = clipboardData.getData('text/html') || '';
-
-            // 如果沒有直接的圖片檔案，檢查 HTML 中是否有 base64 圖片
-            if (imageFiles.length === 0 && pastedHtml) {
-                var imgMatches = pastedHtml.match(/src="data:image\/[^"]+"/g);
-                if (imgMatches) {
-                    for (var k = 0; k < imgMatches.length; k++) {
-                        var dataUrl = imgMatches[k].replace('src="', '').replace('"', '');
-                        var blob = dataURLtoBlob(dataUrl);
-                        if (blob) imageFiles.push(blob);
-                    }
-                }
-            }
-
-            // 如果沒有圖片，讓預設貼上處理
+            // 如果沒有圖片，讓預設貼上處理文字
             if (imageFiles.length === 0) return;
 
-            // 有圖片時，阻止預設行為
+            // 有圖片時，先阻止預設行為
             event.preventDefault();
 
             var textarea = document.getElementById("article-content");
             var cursorPos = textarea.selectionStart;
+
+            // 取得剪貼簿中的純文字
+            var pastedText = clipboardData.getData('text/plain') || '';
 
             // 先插入文字
             if (pastedText) {
@@ -707,12 +694,7 @@
             // 上傳並插入圖片
             for (var j = 0; j < imageFiles.length; j++) {
                 var formData = new FormData();
-                var imgFile = imageFiles[j];
-                // 如果是 Blob 沒有 name，給它一個檔名
-                if (!imgFile.name) {
-                    imgFile = new File([imgFile], "paste-" + Date.now() + "-" + j + ".png", { type: imgFile.type || "image/png" });
-                }
-                formData.append("file", imgFile);
+                formData.append("file", imageFiles[j]);
 
                 try {
                     var resp = await fetch(API_BASE + "/api/images", {
@@ -747,24 +729,6 @@
                 } catch (e) {
                     showMessage("圖片上傳錯誤: " + e.message, "error");
                 }
-            }
-        }
-
-        // 將 data URL 轉換為 Blob
-        function dataURLtoBlob(dataURL) {
-            try {
-                var parts = dataURL.split(',');
-                var mime = parts[0].match(/:(.*?);/)[1];
-                var bstr = atob(parts[1]);
-                var n = bstr.length;
-                var u8arr = new Uint8Array(n);
-                while (n--) {
-                    u8arr[n] = bstr.charCodeAt(n);
-                }
-                return new Blob([u8arr], { type: mime });
-            } catch (e) {
-                console.error("dataURLtoBlob error:", e);
-                return null;
             }
         }
 
