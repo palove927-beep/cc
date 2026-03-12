@@ -161,6 +161,120 @@
         }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: #fff;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 {
+            font-size: 18px;
+            margin: 0;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .article-meta {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .article-content-preview {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            margin-bottom: 20px;
+        }
+        .stocks-section h4 {
+            font-size: 15px;
+            margin-bottom: 12px;
+            color: #24292e;
+        }
+        .stock-detail-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+        }
+        .stock-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .stock-detail-code {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .stock-detail-name {
+            font-weight: 500;
+            color: #333;
+        }
+        .stock-detail-paragraph {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.5;
+            padding-left: 12px;
+            border-left: 3px solid #e3f2fd;
+        }
+        .no-paragraph {
+            color: #999;
+            font-style: italic;
+        }
+        .article-item.clickable {
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .article-item.clickable:hover {
+            border-color: #1976d2;
+        }
     </style>
 </head>
 <body>
@@ -225,6 +339,24 @@
                 </div>
                 <div id="articles-list" class="article-list">
                     <p class="loading">載入中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Article Detail Modal -->
+        <div id="article-modal" class="modal-overlay" style="display:none;" onclick="closeModalOnOverlay(event)">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="modal-title">文章詳情</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="article-meta" id="modal-meta"></div>
+                    <div class="article-content-preview" id="modal-content"></div>
+                    <div class="stocks-section">
+                        <h4>標記的股票與段落</h4>
+                        <div id="modal-stocks"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -347,39 +479,82 @@
             var html = "";
             for (var i = 0; i < articles.length; i++) {
                 var a = articles[i];
-                html += '<div class="article-item" data-id="' + a.id + '">';
+                html += '<div class="article-item clickable" data-id="' + a.id + '" onclick="viewArticle(' + a.id + ', event)">';
                 html += '<div class="article-header">';
                 html += '<span class="article-title">' + escapeHtml(a.title) + '</span>';
                 html += '<span class="article-date">' + a.publish_date + '</span>';
                 html += '</div>';
                 html += '<div class="article-actions">';
-                html += '<button class="btn btn-secondary btn-small" onclick="viewArticle(' + a.id + ')">查看</button>';
-                html += '<button class="btn btn-danger btn-small" onclick="deleteArticle(' + a.id + ')">刪除</button>';
+                html += '<button class="btn btn-danger btn-small" onclick="deleteArticle(' + a.id + ', event)">刪除</button>';
                 html += '</div>';
                 html += '</div>';
             }
             container.innerHTML = html;
         }
 
-        function viewArticle(id) {
+        function viewArticle(id, event) {
+            if (event) event.stopPropagation();
+
             fetch(WORKER_URL + "/api/articles/" + id)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 var article = data.article;
                 var stocks = data.stocks || [];
 
-                var stocksHtml = stocks.map(function(s) {
-                    return s.stock_name + "(" + s.stock_code + ")";
-                }).join(", ");
+                // Set modal title and meta
+                document.getElementById("modal-title").textContent = article.title;
+                document.getElementById("modal-meta").textContent = "發布日期: " + article.publish_date;
 
-                alert("標題: " + article.title + "\n日期: " + article.publish_date + "\n\n標記股票:\n" + stocksHtml);
+                // Set article content preview
+                var content = article.content || "";
+                if (content.length > 1000) {
+                    content = content.substring(0, 1000) + "...";
+                }
+                document.getElementById("modal-content").textContent = content;
+
+                // Render stocks with paragraphs
+                var stocksContainer = document.getElementById("modal-stocks");
+                if (!stocks || stocks.length === 0) {
+                    stocksContainer.innerHTML = '<p class="no-paragraph">未標記任何股票</p>';
+                } else {
+                    var stocksHtml = "";
+                    for (var i = 0; i < stocks.length; i++) {
+                        var s = stocks[i];
+                        stocksHtml += '<div class="stock-detail-item">';
+                        stocksHtml += '<div class="stock-detail-header">';
+                        stocksHtml += '<span class="stock-detail-code">' + s.stock_code + '</span>';
+                        stocksHtml += '<span class="stock-detail-name">' + escapeHtml(s.stock_name) + '</span>';
+                        stocksHtml += '</div>';
+                        if (s.paragraph && s.paragraph.trim()) {
+                            stocksHtml += '<div class="stock-detail-paragraph">' + escapeHtml(s.paragraph) + '</div>';
+                        } else {
+                            stocksHtml += '<div class="stock-detail-paragraph no-paragraph">無摘要段落</div>';
+                        }
+                        stocksHtml += '</div>';
+                    }
+                    stocksContainer.innerHTML = stocksHtml;
+                }
+
+                // Show modal
+                document.getElementById("article-modal").style.display = "flex";
             })
             .catch(function(e) {
                 showMessage("無法載入文章: " + e.message, "error");
             });
         }
 
-        function deleteArticle(id) {
+        function closeModal() {
+            document.getElementById("article-modal").style.display = "none";
+        }
+
+        function closeModalOnOverlay(event) {
+            if (event.target.id === "article-modal") {
+                closeModal();
+            }
+        }
+
+        function deleteArticle(id, event) {
+            if (event) event.stopPropagation();
             if (!confirm("確定要刪除這篇文章嗎？")) return;
 
             fetch(WORKER_URL + "/api/articles/" + id, {
