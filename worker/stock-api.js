@@ -933,40 +933,49 @@ function parseStocksFromContent(content) {
 
 /**
  * 擷取包含指定位置的段落
- * 以「數字. 」格式的項目符號作為段落分隔
+ * 段落分隔：空行（\n\n）或「數字. 」格式
+ * 注意：a. b. c. 是子項目，不作為段落分隔
  */
 function extractParagraph(content, position) {
-  // 從 position 往前找最近的「數字. 」格式的段落開頭
   var beforePos = content.substring(0, position);
+  var afterPos = content.substring(position);
+
+  // 段落分隔模式：只用數字.（如 1. 2. 3.）
+  var paraStartPattern = /\n(\d+)\.\s/g;
+
+  // 往前找段落開頭
   var start = 0;
 
-  // 找所有「數字. 」的位置，取最接近 position 的那個
-  var numRegex = /(?:^|\n)(\d+)\.\s/g;
+  // 找最近的空行
+  var emptyLineIdx = beforePos.lastIndexOf("\n\n");
+  if (emptyLineIdx !== -1) {
+    start = emptyLineIdx + 2;
+  }
+
+  // 找最近的「數字. 」
   var match;
-  var lastMatchStart = -1;
-
-  while ((match = numRegex.exec(beforePos)) !== null) {
-    // match.index 是整個匹配的起始位置
-    // 如果開頭是換行，段落從換行後開始
-    var paraStart = match.index;
-    if (content[paraStart] === "\n") {
-      paraStart += 1;
-    }
-    lastMatchStart = paraStart;
+  var lastParaStart = -1;
+  paraStartPattern.lastIndex = 0;
+  while ((match = paraStartPattern.exec(beforePos)) !== null) {
+    lastParaStart = match.index + 1; // 跳過換行
+  }
+  if (lastParaStart > start) {
+    start = lastParaStart;
   }
 
-  if (lastMatchStart !== -1) {
-    start = lastMatchStart;
+  // 往後找段落結尾
+  var end = content.length;
+
+  // 找最近的空行
+  var emptyLineEnd = afterPos.indexOf("\n\n");
+  if (emptyLineEnd !== -1) {
+    end = position + emptyLineEnd;
   }
 
-  // 找段落結尾（下一個「數字. 」或文章結尾）
-  var afterPos = content.substring(position);
+  // 找最近的「數字. 」
   var endMatch = afterPos.match(/\n\d+\.\s/);
-  var end;
-  if (endMatch) {
+  if (endMatch && position + endMatch.index < end) {
     end = position + endMatch.index;
-  } else {
-    end = content.length;
   }
 
   var para = content.substring(start, end).trim();
