@@ -933,14 +933,15 @@ function parseStocksFromContent(content) {
 
 /**
  * 擷取包含指定位置的段落
- * 段落分隔：空行（\n\n）、「數字. 」、「字母. 」格式
+ * 段落分隔：空行（\n\n）或「數字. 」格式
+ * 注意：a. b. c. 是子項目，不作為段落分隔
  */
 function extractParagraph(content, position) {
   var beforePos = content.substring(0, position);
   var afterPos = content.substring(position);
 
-  // 段落分隔模式：數字. 或 字母.（如 1. 2. a. b.）
-  var paraStartPattern = /\n([0-9]+|[a-z])\.\s/gi;
+  // 段落分隔模式：只用數字.（如 1. 2. 3.）
+  var paraStartPattern = /\n(\d+)\.\s/g;
 
   // 往前找段落開頭
   var start = 0;
@@ -951,7 +952,7 @@ function extractParagraph(content, position) {
     start = emptyLineIdx + 2;
   }
 
-  // 找最近的「數字. 」或「字母. 」
+  // 找最近的「數字. 」
   var match;
   var lastParaStart = -1;
   paraStartPattern.lastIndex = 0;
@@ -971,8 +972,8 @@ function extractParagraph(content, position) {
     end = position + emptyLineEnd;
   }
 
-  // 找最近的「數字. 」或「字母. 」
-  var endMatch = afterPos.match(/\n([0-9]+|[a-z])\.\s/i);
+  // 找最近的「數字. 」
+  var endMatch = afterPos.match(/\n\d+\.\s/);
   if (endMatch && position + endMatch.index < end) {
     end = position + endMatch.index;
   }
