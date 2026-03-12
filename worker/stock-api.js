@@ -83,6 +83,11 @@ export default {
       return corsResponse(await handleStockArticles(url, env));
     }
 
+    // 股票財測查詢
+    if (url.pathname === "/api/forecasts") {
+      return corsResponse(await handleForecasts(url, env));
+    }
+
     // 系統狀態檢查
     if (url.pathname === "/api/status") {
       return corsResponse(jsonResponse({
@@ -641,7 +646,7 @@ async function handleGetArticle(id, env) {
 
     // 取得該文章的股票標記
     var stocks = await env.DB.prepare(
-      "SELECT stock_code, stock_name, paragraph, eps_2025, eps_2026, eps_2027, forecast_date FROM article_stocks WHERE article_id = ? ORDER BY position, id"
+      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY position, id"
     ).bind(id).all();
 
     return jsonResponse({
@@ -711,16 +716,25 @@ async function handleCreateArticle(request, env) {
 
     for (var i = 0; i < stockTags.length; i++) {
       var tag = stockTags[i];
-      // 解析 EPS 財測
-      var eps = parseEPS(tag.paragraph || "");
-      tag.eps_2025 = eps.eps_2025;
-      tag.eps_2026 = eps.eps_2026;
-      tag.eps_2027 = eps.eps_2027;
 
+      // 儲存股票標記
       await env.DB.prepare(`
-        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position, eps_2025, eps_2026, eps_2027, forecast_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i, eps.eps_2025, eps.eps_2026, eps.eps_2027, publishDate).run();
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
+
+      // 解析並儲存 EPS 財測（獨立表）
+      var eps = parseEPS(tag.paragraph || "");
+      if (eps.eps_2025 || eps.eps_2026 || eps.eps_2027) {
+        tag.eps_2025 = eps.eps_2025;
+        tag.eps_2026 = eps.eps_2026;
+        tag.eps_2027 = eps.eps_2027;
+
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+      }
     }
 
     return jsonResponse({
@@ -770,7 +784,6 @@ async function handleStockArticles(url, env) {
     var result = await env.DB.prepare(`
       SELECT
         ast.stock_code, ast.stock_name, ast.paragraph,
-        ast.eps_2025, ast.eps_2026, ast.eps_2027, ast.forecast_date,
         a.id as article_id, a.title, a.publish_date
       FROM article_stocks ast
       INNER JOIN articles a ON ast.article_id = a.id
@@ -781,6 +794,50 @@ async function handleStockArticles(url, env) {
     return jsonResponse({
       stock_code: code,
       articles: result.results
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 查詢股票財測
+ * GET /api/forecasts?code=2327 - 查詢特定股票
+ * GET /api/forecasts - 查詢所有最新財測
+ */
+async function handleForecasts(url, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
+  }
+
+  var code = url.searchParams.get("code");
+
+  try {
+    var result;
+    if (code) {
+      // 查詢特定股票的財測歷史
+      result = await env.DB.prepare(`
+        SELECT stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id
+        FROM stock_forecasts
+        WHERE stock_code = ?
+        ORDER BY forecast_date DESC
+      `).bind(code).all();
+    } else {
+      // 查詢所有股票的最新財測
+      result = await env.DB.prepare(`
+        SELECT sf.stock_code, sf.stock_name, sf.forecast_date, sf.eps_2025, sf.eps_2026, sf.eps_2027
+        FROM stock_forecasts sf
+        INNER JOIN (
+          SELECT stock_code, MAX(forecast_date) as max_date
+          FROM stock_forecasts
+          GROUP BY stock_code
+        ) latest ON sf.stock_code = latest.stock_code AND sf.forecast_date = latest.max_date
+        ORDER BY sf.stock_code
+      `).all();
+    }
+
+    return jsonResponse({
+      forecasts: result.results
     });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
