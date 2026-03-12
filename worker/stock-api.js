@@ -791,7 +791,7 @@ async function tagStocksWithAI(content, apiKey) {
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- paragraph 是文章中以空行（換行）分隔的獨立段落，完整複製該段落原文
+- paragraph 是股票所屬的完整段落。段落通常以「數字. 」開頭（如「5. 豐達科(3004)：...」），從該數字開頭到下一個數字編號之前為一個完整段落
 - 不要合併多個段落，只複製股票首次出現的那一個段落
 - 跳過外國公司（AWS、NVIDIA、Google、Samsung 等）
 - 如果沒找到任何台灣股票，回傳空陣列 []
@@ -900,23 +900,33 @@ function parseStocksFromContent(content) {
 
 /**
  * 擷取包含指定位置的段落
+ * 以「數字. 」格式的項目符號作為段落分隔
  */
 function extractParagraph(content, position) {
-  // 找段落開頭（數字. 開頭或文章開頭）
-  var start = content.lastIndexOf("\n", position);
-  if (start === -1) start = 0;
+  // 從 position 往前找最近的「數字. 」格式的段落開頭
+  var beforePos = content.substring(0, position);
+  var start = 0;
 
-  // 往前找到段落編號開頭
-  var beforeStart = content.substring(0, start);
-  var numMatch = beforeStart.match(/\n(\d+\.\s)/g);
-  if (numMatch) {
-    var lastNum = beforeStart.lastIndexOf(numMatch[numMatch.length - 1]);
-    if (lastNum !== -1 && position - lastNum < 5000) {
-      start = lastNum + 1;
+  // 找所有「數字. 」的位置，取最接近 position 的那個
+  var numRegex = /(?:^|\n)(\d+)\.\s/g;
+  var match;
+  var lastMatchStart = -1;
+
+  while ((match = numRegex.exec(beforePos)) !== null) {
+    // match.index 是整個匹配的起始位置
+    // 如果開頭是換行，段落從換行後開始
+    var paraStart = match.index;
+    if (content[paraStart] === "\n") {
+      paraStart += 1;
     }
+    lastMatchStart = paraStart;
   }
 
-  // 找段落結尾（下一個數字. 或文章結尾）
+  if (lastMatchStart !== -1) {
+    start = lastMatchStart;
+  }
+
+  // 找段落結尾（下一個「數字. 」或文章結尾）
   var afterPos = content.substring(position);
   var endMatch = afterPos.match(/\n\d+\.\s/);
   var end;
