@@ -436,9 +436,17 @@
 
                 if (result.success) {
                     showMessage("上傳成功！已標記 " + result.stocks_tagged + " 支股票", "success");
-                    renderTaggedStocks(result.stocks || []);
-                    document.getElementById("upload-buttons").style.display = "none";
-                    document.getElementById("upload-result").classList.remove("hidden");
+                    // 切換到文章列表並開啟新文章
+                    document.getElementById("tab-upload").classList.remove("active");
+                    document.getElementById("tab-articles").classList.add("active");
+                    document.getElementById("upload-section").style.display = "none";
+                    document.getElementById("articles-section").style.display = "block";
+                    // 載入文章列表後開啟新文章
+                    var newArticleId = result.id;
+                    setTimeout(function() {
+                        loadArticlesAndOpen(newArticleId);
+                    }, 300);
+                    clearForm();
                 } else {
                     showMessage("上傳失敗: " + (result.error || "未知錯誤"), "error");
                 }
@@ -480,14 +488,23 @@
                 url += "?code=" + searchCode;
             }
 
-            fetch(url)
+            return fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 allArticles = data.articles || [];
                 renderArticles(allArticles);
+                return allArticles;
             })
             .catch(function() {
                 document.getElementById("articles-list").innerHTML = "<p style='color:#999;'>無法載入文章</p>";
+            });
+        }
+
+        function loadArticlesAndOpen(articleId) {
+            loadArticles().then(function() {
+                if (articleId) {
+                    viewArticle(articleId);
+                }
             });
         }
 
@@ -531,9 +548,16 @@
                 document.getElementById("modal-title").textContent = article.title;
                 document.getElementById("modal-meta").textContent = "發布日期: " + article.publish_date;
 
-                // Set article content (full)
-                var content = article.content || "";
-                document.getElementById("modal-content").textContent = content;
+                // Set article content (full) with stock highlighting
+                var content = escapeHtml(article.content || "");
+                // 高亮所有被標記的股票
+                for (var j = 0; j < stocks.length; j++) {
+                    var stockName = escapeRegExp(stocks[j].stock_name);
+                    var stockCode = stocks[j].stock_code;
+                    var highlightPattern = new RegExp('(' + stockName + '|' + stockCode + ')', 'g');
+                    content = content.replace(highlightPattern, '<span class="stock-highlight">$1</span>');
+                }
+                document.getElementById("modal-content").innerHTML = content;
 
                 // Render stocks with paragraphs
                 var stocksContainer = document.getElementById("modal-stocks");
