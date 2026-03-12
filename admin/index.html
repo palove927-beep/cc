@@ -659,59 +659,76 @@
 
         // 處理貼上事件（支援貼上圖片）
         async function handlePaste(event) {
-            var items = (event.clipboardData || event.originalEvent.clipboardData).items;
-            var hasImage = false;
+            var clipboardData = event.clipboardData || event.originalEvent.clipboardData;
+            var items = clipboardData.items;
+            var imageFiles = [];
 
+            // 收集所有圖片
             for (var i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
-                    hasImage = true;
                     var file = items[i].getAsFile();
-                    if (file) {
-                        // 上傳圖片
-                        var formData = new FormData();
-                        formData.append("file", file);
-
-                        try {
-                            var resp = await fetch(API_BASE + "/api/images", {
-                                method: "POST",
-                                body: formData
-                            });
-                            var data = await resp.json();
-
-                            if (data.success) {
-                                // 在游標位置插入圖片標記
-                                var textarea = document.getElementById("article-content");
-                                var cursorPos = textarea.selectionStart;
-                                var textBefore = textarea.value.substring(0, cursorPos);
-                                var textAfter = textarea.value.substring(cursorPos);
-                                var imageTag = "\n[圖片: " + API_BASE + data.url + "]\n";
-                                textarea.value = textBefore + imageTag + textAfter;
-
-                                // 加入已上傳圖片列表
-                                uploadedImages.push(data.url);
-
-                                // 更新預覽
-                                var previewDiv = document.getElementById("image-preview");
-                                var imgContainer = document.createElement("div");
-                                imgContainer.style.cssText = "position: relative; display: inline-block;";
-                                imgContainer.innerHTML = '<img src="' + API_BASE + data.url + '" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">' +
-                                    '<button onclick="removeImage(this, \'' + data.url + '\')" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #e74c3c; color: white; cursor: pointer;">×</button>';
-                                previewDiv.appendChild(imgContainer);
-
-                                showMessage("圖片已上傳", "success");
-                            } else {
-                                showMessage("圖片上傳失敗: " + data.error, "error");
-                            }
-                        } catch (e) {
-                            showMessage("圖片上傳錯誤: " + e.message, "error");
-                        }
-                    }
+                    if (file) imageFiles.push(file);
                 }
             }
 
-            // 如果有圖片，阻止預設貼上行為（避免貼入亂碼）
-            if (hasImage) {
-                event.preventDefault();
+            // 如果沒有圖片，讓預設貼上處理文字
+            if (imageFiles.length === 0) return;
+
+            // 有圖片時，先阻止預設行為
+            event.preventDefault();
+
+            var textarea = document.getElementById("article-content");
+            var cursorPos = textarea.selectionStart;
+
+            // 取得剪貼簿中的純文字
+            var pastedText = clipboardData.getData('text/plain') || '';
+
+            // 先插入文字
+            if (pastedText) {
+                var textBefore = textarea.value.substring(0, cursorPos);
+                var textAfter = textarea.value.substring(textarea.selectionEnd);
+                textarea.value = textBefore + pastedText + textAfter;
+                cursorPos = textBefore.length + pastedText.length;
+            }
+
+            // 上傳並插入圖片
+            for (var j = 0; j < imageFiles.length; j++) {
+                var formData = new FormData();
+                formData.append("file", imageFiles[j]);
+
+                try {
+                    var resp = await fetch(API_BASE + "/api/images", {
+                        method: "POST",
+                        body: formData
+                    });
+                    var data = await resp.json();
+
+                    if (data.success) {
+                        // 在目前位置插入圖片標記
+                        var before = textarea.value.substring(0, cursorPos);
+                        var after = textarea.value.substring(cursorPos);
+                        var imageTag = "\n[圖片: " + API_BASE + data.url + "]\n";
+                        textarea.value = before + imageTag + after;
+                        cursorPos += imageTag.length;
+
+                        // 加入已上傳圖片列表
+                        uploadedImages.push(data.url);
+
+                        // 更新預覽
+                        var previewDiv = document.getElementById("image-preview");
+                        var imgContainer = document.createElement("div");
+                        imgContainer.style.cssText = "position: relative; display: inline-block;";
+                        imgContainer.innerHTML = '<img src="' + API_BASE + data.url + '" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">' +
+                            '<button onclick="removeImage(this, \'' + data.url + '\')" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #e74c3c; color: white; cursor: pointer;">×</button>';
+                        previewDiv.appendChild(imgContainer);
+
+                        showMessage("圖片 " + (j + 1) + " 已上傳", "success");
+                    } else {
+                        showMessage("圖片上傳失敗: " + data.error, "error");
+                    }
+                } catch (e) {
+                    showMessage("圖片上傳錯誤: " + e.message, "error");
+                }
             }
         }
 
