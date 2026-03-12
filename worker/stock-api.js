@@ -641,7 +641,7 @@ async function handleGetArticle(id, env) {
 
     // 取得該文章的股票標記
     var stocks = await env.DB.prepare(
-      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY stock_code"
+      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY position, id"
     ).bind(id).all();
 
     return jsonResponse({
@@ -696,13 +696,25 @@ async function handleCreateArticle(request, env) {
 
     var articleId = result.meta.last_row_id;
 
-    // 3. 儲存股票標記
+    // 3. 儲存股票標記（依文章順序）
+    // 計算每個股票在文章中首次出現的位置
+    for (var i = 0; i < stockTags.length; i++) {
+      var tag = stockTags[i];
+      // 找出股票名稱或代號在文章中的位置
+      var pos = content.indexOf(tag.name);
+      if (pos === -1) pos = content.indexOf(tag.code);
+      if (pos === -1) pos = 999999; // 找不到就放最後
+      tag.position = pos;
+    }
+    // 依位置排序
+    stockTags.sort(function(a, b) { return a.position - b.position; });
+
     for (var i = 0; i < stockTags.length; i++) {
       var tag = stockTags[i];
       await env.DB.prepare(`
-        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph)
-        VALUES (?, ?, ?, ?)
-      `).bind(articleId, tag.code, tag.name, tag.paragraph || "").run();
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
     }
 
     return jsonResponse({
