@@ -784,22 +784,19 @@ async function tagStocksWithAI(content, apiKey) {
 日月光=3711, 矽品=2325, 欣興=3037, 景碩=3189, 南電=8046
 
 ## 輸出格式
-回傳 JSON 陣列，每個元素包含：
+回傳 JSON 陣列，每個元素只包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
-- paragraph: 該股票首次出現的完整段落（以空行分隔的段落，原文複製）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- paragraph 是股票所屬的完整段落。段落通常以「數字. 」開頭（如「5. 豐達科(3004)：...」），從該數字開頭到下一個數字編號之前為一個完整段落
-- 不要合併多個段落，只複製股票首次出現的那一個段落
 - 跳過外國公司（AWS、NVIDIA、Google、Samsung 等）
 - 如果沒找到任何台灣股票，回傳空陣列 []
 
 ## 文章內容
 ${content}`
         }],
-        max_tokens: 16000
+        max_tokens: 8000
       })
     });
 
@@ -816,7 +813,32 @@ ${content}`
       text = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "");
     }
 
-    return JSON.parse(text);
+    var stocks = JSON.parse(text);
+
+    // 用程式提取段落，而不是讓 AI 複製（更可靠）
+    var seen = {};
+    var result = [];
+    for (var i = 0; i < stocks.length; i++) {
+      var stock = stocks[i];
+      if (!seen[stock.code]) {
+        seen[stock.code] = true;
+        // 在文章中找到該股票的位置
+        var searchPattern = stock.name + "(" + stock.code + ")";
+        var searchPattern2 = stock.name + "（" + stock.code + "）";
+        var pos = content.indexOf(searchPattern);
+        if (pos === -1) pos = content.indexOf(searchPattern2);
+        if (pos === -1) pos = content.indexOf(stock.code);
+
+        var paragraph = pos !== -1 ? extractParagraph(content, pos) : "";
+        result.push({
+          code: stock.code,
+          name: stock.name,
+          paragraph: paragraph
+        });
+      }
+    }
+
+    return result;
   } catch (e) {
     console.error("AI tagging error:", e);
     return parseStocksFromContent(content);
