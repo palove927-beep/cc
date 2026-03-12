@@ -90,7 +90,8 @@ export default {
         env: {
           VERCEL_AI_KEY: env.VERCEL_AI_KEY ? "已設定" : "未設定",
           FUGLE_API_KEY: env.FUGLE_API_KEY ? "已設定" : "未設定",
-          DB: env.DB ? "已連接" : "未連接"
+          DB: env.DB ? "已連接" : "未連接",
+          IMAGES: env.IMAGES ? "已連接" : "未設定"
         }
       }));
     }
@@ -104,6 +105,17 @@ export default {
       } catch (e) {
         return corsResponse(jsonResponse({ error: e.message }, 500));
       }
+    }
+
+    // 圖片上傳 API
+    if (url.pathname === "/api/images" && request.method === "POST") {
+      return corsResponse(await handleImageUpload(request, env));
+    }
+
+    // 圖片讀取 API
+    if (url.pathname.startsWith("/api/images/")) {
+      var imageName = url.pathname.replace("/api/images/", "");
+      return await handleImageGet(imageName, env);
     }
 
     return corsResponse(new Response(
@@ -655,6 +667,7 @@ async function handleCreateArticle(request, env) {
     var title = body.title;
     var content = body.content;
     var publishDate = body.publish_date || new Date().toISOString().split("T")[0];
+    var images = body.images || [];
 
     if (!content) {
       return jsonResponse({ error: "請提供文章內容" }, 400);
@@ -669,14 +682,16 @@ async function handleCreateArticle(request, env) {
       stockTags = parseStocksFromContent(content);
     }
 
-    // 2. 儲存文章
+    // 2. 儲存文章（含圖片）
+    var imagesJson = images.length > 0 ? JSON.stringify(images) : null;
     var result = await env.DB.prepare(`
-      INSERT INTO articles (title, content, publish_date)
-      VALUES (?, ?, ?)
+      INSERT INTO articles (title, content, publish_date, images)
+      VALUES (?, ?, ?, ?)
     `).bind(
       title || "週報 " + publishDate,
       content,
-      publishDate
+      publishDate,
+      imagesJson
     ).run();
 
     var articleId = result.meta.last_row_id;
@@ -1024,4 +1039,79 @@ function corsResponse(response) {
     status: response.status,
     headers: headers
   });
+}
+
+/**
+ * 處理圖片上傳
+ * POST /api/images
+ * Content-Type: multipart/form-data
+ * Body: file (圖片檔案)
+ */
+async function handleImageUpload(request, env) {
+  if (!env || !env.IMAGES) {
+    return jsonResponse({ error: "R2 尚未設定" }, 500);
+  }
+
+  try {
+    var formData = await request.formData();
+    var file = formData.get("file");
+
+    if (!file) {
+      return jsonResponse({ error: "請提供 file 欄位" }, 400);
+    }
+
+    // 驗證檔案類型
+    var allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (allowedTypes.indexOf(file.type) === -1) {
+      return jsonResponse({ error: "只允許 JPEG、PNG、GIF、WebP 格式" }, 400);
+    }
+
+    // 生成唯一檔名
+    var ext = file.name.split(".").pop() || "jpg";
+    var timestamp = Date.now();
+    var random = Math.random().toString(36).substring(2, 8);
+    var fileName = timestamp + "-" + random + "." + ext;
+
+    // 上傳到 R2
+    await env.IMAGES.put(fileName, file.stream(), {
+      httpMetadata: {
+        contentType: file.type
+      }
+    });
+
+    return jsonResponse({
+      success: true,
+      fileName: fileName,
+      url: "/api/images/" + fileName
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 處理圖片讀取
+ * GET /api/images/:fileName
+ */
+async function handleImageGet(fileName, env) {
+  if (!env || !env.IMAGES) {
+    return new Response("R2 not configured", { status: 500 });
+  }
+
+  try {
+    var object = await env.IMAGES.get(fileName);
+
+    if (!object) {
+      return new Response("Image not found", { status: 404 });
+    }
+
+    var headers = new Headers();
+    headers.set("Content-Type", object.httpMetadata?.contentType || "image/jpeg");
+    headers.set("Cache-Control", "public, max-age=31536000");
+    headers.set("Access-Control-Allow-Origin", "*");
+
+    return new Response(object.body, { headers: headers });
+  } catch (e) {
+    return new Response("Error: " + e.message, { status: 500 });
+  }
 }

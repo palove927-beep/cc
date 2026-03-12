@@ -321,6 +321,15 @@
                     <textarea id="article-content" placeholder="貼上完整週報內容..."></textarea>
                 </div>
 
+                <div class="form-group">
+                    <label>附加圖片（選填）</label>
+                    <div id="image-upload-area" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; text-align: center; cursor: pointer;" onclick="document.getElementById('image-input').click()">
+                        <input type="file" id="image-input" multiple accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
+                        <p style="margin: 0; color: #666;">點擊或拖放圖片到此處</p>
+                    </div>
+                    <div id="image-preview" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;"></div>
+                </div>
+
                 <div id="upload-buttons" style="display: flex; gap: 12px;">
                     <button class="btn" onclick="uploadArticle()" id="upload-btn">上傳並標記股票</button>
                     <button class="btn btn-secondary" onclick="clearForm()">清除</button>
@@ -416,7 +425,8 @@
                 body: JSON.stringify({
                     title: title || "週報 " + date,
                     content: content,
-                    publish_date: date
+                    publish_date: date,
+                    images: uploadedImages
                 })
             })
             .then(function(r) { return r.json(); })
@@ -596,6 +606,55 @@
             document.getElementById("article-content").value = "";
             document.getElementById("article-date").valueAsDate = new Date();
             document.getElementById("upload-result").classList.add("hidden");
+            document.getElementById("image-input").value = "";
+            document.getElementById("image-preview").innerHTML = "";
+            uploadedImages = [];
+        }
+
+        // 圖片上傳相關
+        var uploadedImages = [];
+
+        function handleImageSelect(event) {
+            var files = event.target.files;
+            for (var i = 0; i < files.length; i++) {
+                uploadImage(files[i]);
+            }
+        }
+
+        async function uploadImage(file) {
+            var formData = new FormData();
+            formData.append("file", file);
+
+            // 顯示上傳中預覽
+            var previewDiv = document.getElementById("image-preview");
+            var imgContainer = document.createElement("div");
+            imgContainer.style.cssText = "position: relative; display: inline-block;";
+            imgContainer.innerHTML = '<div style="width: 100px; height: 100px; background: #eee; display: flex; align-items: center; justify-content: center; border-radius: 4px;">上傳中...</div>';
+            previewDiv.appendChild(imgContainer);
+
+            try {
+                var resp = await fetch(API_BASE + "/api/images", {
+                    method: "POST",
+                    body: formData
+                });
+                var data = await resp.json();
+
+                if (data.success) {
+                    uploadedImages.push(data.url);
+                    imgContainer.innerHTML = '<img src="' + API_BASE + data.url + '" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">' +
+                        '<button onclick="removeImage(this, \'' + data.url + '\')" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #e74c3c; color: white; cursor: pointer;">×</button>';
+                } else {
+                    imgContainer.innerHTML = '<div style="width: 100px; height: 100px; background: #fee; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: #c00; font-size: 12px;">失敗</div>';
+                }
+            } catch (e) {
+                imgContainer.innerHTML = '<div style="width: 100px; height: 100px; background: #fee; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: #c00; font-size: 12px;">錯誤</div>';
+            }
+        }
+
+        function removeImage(btn, url) {
+            var idx = uploadedImages.indexOf(url);
+            if (idx > -1) uploadedImages.splice(idx, 1);
+            btn.parentElement.remove();
         }
 
         function escapeHtml(text) {
