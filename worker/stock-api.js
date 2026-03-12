@@ -766,7 +766,7 @@ async function tagStocksWithAI(content, apiKey) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-3.1-pro-preview",
         messages: [{
           role: "user",
           content: `你是台灣股票文章標記助手。請從以下文章中找出所有提及的台灣上市櫃公司。
@@ -790,8 +790,8 @@ async function tagStocksWithAI(content, apiKey) {
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- 跳過外國公司（AWS、NVIDIA、Google、Samsung 等）
-- 如果沒找到任何台灣股票，回傳空陣列 []
+- 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
+- 如果沒找到任何股票，回傳空陣列 []
 
 ## 文章內容
 ${content}`
@@ -861,7 +861,7 @@ async function testAITagging(content, apiKey) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-3.1-pro-preview",
         messages: [{
           role: "user",
           content: `請從以下文字找出台灣股票，回傳 JSON 陣列 [{code, name}]：
