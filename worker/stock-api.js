@@ -963,6 +963,20 @@ function extractParagraph(content, position) {
     start = lastParaStart;
   }
 
+  // 找最近的標題行作為段落開頭
+  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤', '備註：'];
+  for (var i = 0; i < titlePatterns.length; i++) {
+    var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
+    if (titleIdx === -1) titleIdx = beforePos.lastIndexOf(titlePatterns[i]);
+    if (titleIdx !== -1) {
+      var titleStart = titleIdx;
+      if (beforePos[titleIdx] === '\n') titleStart += 1;
+      if (titleStart > start) {
+        start = titleStart;
+      }
+    }
+  }
+
   // 往後找段落結尾
   var end = content.length;
 
