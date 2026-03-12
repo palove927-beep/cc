@@ -978,8 +978,8 @@ function extractParagraph(content, position) {
     end = position + endMatch.index;
   }
 
-  // 找最近的標題行（如「定錨XX表」或「XX：」開頭的獨立行）
-  var titleMatch = afterPos.match(/\n(定錨|移除追蹤|新增追蹤|備註)/);
+  // 找最近的標題行（排除 a. b. c. 開頭的子項目）
+  var titleMatch = afterPos.match(/\n(?![a-z]\.\s)(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
   if (titleMatch && position + titleMatch.index < end) {
     end = position + titleMatch.index;
   }
