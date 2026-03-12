@@ -641,7 +641,7 @@ async function handleGetArticle(id, env) {
 
     // 取得該文章的股票標記
     var stocks = await env.DB.prepare(
-      "SELECT stock_code, stock_name, paragraph, eps_2025, eps_2026, eps_2027 FROM article_stocks WHERE article_id = ? ORDER BY position, id"
+      "SELECT stock_code, stock_name, paragraph, eps_2025, eps_2026, eps_2027, forecast_date FROM article_stocks WHERE article_id = ? ORDER BY position, id"
     ).bind(id).all();
 
     return jsonResponse({
@@ -718,9 +718,9 @@ async function handleCreateArticle(request, env) {
       tag.eps_2027 = eps.eps_2027;
 
       await env.DB.prepare(`
-        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position, eps_2025, eps_2026, eps_2027)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i, eps.eps_2025, eps.eps_2026, eps.eps_2027).run();
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position, eps_2025, eps_2026, eps_2027, forecast_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i, eps.eps_2025, eps.eps_2026, eps.eps_2027, publishDate).run();
     }
 
     return jsonResponse({
@@ -770,7 +770,7 @@ async function handleStockArticles(url, env) {
     var result = await env.DB.prepare(`
       SELECT
         ast.stock_code, ast.stock_name, ast.paragraph,
-        ast.eps_2025, ast.eps_2026, ast.eps_2027,
+        ast.eps_2025, ast.eps_2026, ast.eps_2027, ast.forecast_date,
         a.id as article_id, a.title, a.publish_date
       FROM article_stocks ast
       INNER JOIN articles a ON ast.article_id = a.id
