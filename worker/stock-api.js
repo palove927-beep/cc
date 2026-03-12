@@ -828,6 +828,8 @@ ${content}`
         var pos = content.indexOf(searchPattern);
         if (pos === -1) pos = content.indexOf(searchPattern2);
         if (pos === -1) pos = content.indexOf(stock.code);
+        // 外國公司可能只用名稱出現，沒有代號
+        if (pos === -1) pos = content.indexOf(stock.name);
 
         var paragraph = pos !== -1 ? extractParagraph(content, pos) : "";
         result.push({
