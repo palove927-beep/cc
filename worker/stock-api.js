@@ -790,8 +790,8 @@ async function tagStocksWithAI(content, apiKey) {
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- 跳過外國公司（AWS、NVIDIA、Google、Samsung 等）
-- 如果沒找到任何台灣股票，回傳空陣列 []
+- 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
+- 如果沒找到任何股票，回傳空陣列 []
 
 ## 文章內容
 ${content}`
