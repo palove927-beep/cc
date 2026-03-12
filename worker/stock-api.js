@@ -766,7 +766,7 @@ async function tagStocksWithAI(content, apiKey) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-3.1-pro-preview",
         messages: [{
           role: "user",
           content: `你是台灣股票文章標記助手。請從以下文章中找出所有提及的台灣上市櫃公司。
@@ -861,7 +861,7 @@ async function testAITagging(content, apiKey) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-3.1-pro-preview",
         messages: [{
           role: "user",
           content: `請從以下文字找出台灣股票，回傳 JSON 陣列 [{code, name}]：
