@@ -95,6 +95,18 @@ export default {
       }));
     }
 
+    // AI 標記測試
+    if (url.pathname === "/api/test-ai" && request.method === "POST") {
+      try {
+        var body = await request.json();
+        var testContent = body.content || "國巨於2026年3月調漲鉭質電容報價15~20%。台半、德微預計調漲產品報價。";
+        var result = await testAITagging(testContent, env.VERCEL_AI_KEY);
+        return corsResponse(jsonResponse(result));
+      } catch (e) {
+        return corsResponse(jsonResponse({ error: e.message }, 500));
+      }
+    }
+
     return corsResponse(new Response(
       JSON.stringify({ error: "請使用 /api/stock?code=2330" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
@@ -807,6 +819,49 @@ ${content}`
   } catch (e) {
     console.error("AI tagging error:", e);
     return parseStocksFromContent(content);
+  }
+}
+
+/**
+ * 測試 AI 標記功能（debug 用）
+ */
+async function testAITagging(content, apiKey) {
+  if (!apiKey) {
+    return { error: "VERCEL_AI_KEY 未設定" };
+  }
+
+  try {
+    var resp = await fetch("https://gateway.ai.vercel.app/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash",
+        messages: [{
+          role: "user",
+          content: `請從以下文字找出台灣股票，回傳 JSON 陣列 [{code, name}]：
+
+常見台股：國巨=2327, 台半=5425, 德微=3675, 富鼎=8261, 大中=6435, 尼克森=3317
+
+文字內容：${content}`
+        }],
+        max_tokens: 2000
+      })
+    });
+
+    var status = resp.status;
+    var responseText = await resp.text();
+
+    return {
+      status: status,
+      ok: resp.ok,
+      raw_response: responseText,
+      parsed: null
+    };
+  } catch (e) {
+    return { error: e.message };
   }
 }
 
