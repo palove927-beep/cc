@@ -627,12 +627,6 @@ async function handleCreateArticle(request, env) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
   }
 
-  // 驗證管理員密碼
-  var adminKey = request.headers.get("X-Admin-Key");
-  if (env.ADMIN_KEY && adminKey !== env.ADMIN_KEY) {
-    return jsonResponse({ error: "未授權" }, 401);
-  }
-
   try {
     var body = await request.json();
     var title = body.title;
@@ -691,11 +685,6 @@ async function handleCreateArticle(request, env) {
 async function handleDeleteArticle(id, request, env) {
   if (!env || !env.DB) {
     return jsonResponse({ error: "D1 尚未設定" }, 500);
-  }
-
-  var adminKey = request.headers.get("X-Admin-Key");
-  if (env.ADMIN_KEY && adminKey !== env.ADMIN_KEY) {
-    return jsonResponse({ error: "未授權" }, 401);
   }
 
   try {
