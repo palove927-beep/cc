@@ -313,7 +313,7 @@
                     <textarea id="article-content" placeholder="貼上完整週報內容..."></textarea>
                 </div>
 
-                <div style="display: flex; gap: 12px;">
+                <div id="upload-buttons" style="display: flex; gap: 12px;">
                     <button class="btn" onclick="uploadArticle()" id="upload-btn">上傳並標記股票</button>
                     <button class="btn btn-secondary" onclick="clearForm()">清除</button>
                 </div>
@@ -321,6 +321,7 @@
                 <div id="upload-result" class="preview-section hidden">
                     <h3 style="margin-bottom: 12px;">標記結果</h3>
                     <div id="tagged-stocks" class="preview-stocks"></div>
+                    <button class="btn btn-secondary" onclick="backToUpload()" style="margin-top: 16px;">返回</button>
                 </div>
             </div>
         </div>
@@ -418,6 +419,7 @@
                 if (result.success) {
                     showMessage("上傳成功！已標記 " + result.stocks_tagged + " 支股票", "success");
                     renderTaggedStocks(result.stocks || []);
+                    document.getElementById("upload-buttons").style.display = "none";
                     document.getElementById("upload-result").classList.remove("hidden");
                 } else {
                     showMessage("上傳失敗: " + (result.error || "未知錯誤"), "error");
@@ -428,6 +430,12 @@
                 btn.textContent = "上傳並標記股票";
                 showMessage("上傳失敗: " + e.message, "error");
             });
+        }
+
+        function backToUpload() {
+            document.getElementById("upload-result").classList.add("hidden");
+            document.getElementById("upload-buttons").style.display = "flex";
+            clearForm();
         }
 
         function renderTaggedStocks(stocks) {
