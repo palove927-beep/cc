@@ -442,17 +442,13 @@
 
                 if (result.success) {
                     showMessage("上傳成功！已標記 " + result.stocks_tagged + " 支股票", "success");
+                    clearForm();
                     // 切換到文章列表並開啟新文章
-                    document.getElementById("tab-upload").classList.remove("active");
-                    document.getElementById("tab-articles").classList.add("active");
-                    document.getElementById("upload-section").style.display = "none";
-                    document.getElementById("articles-section").style.display = "block";
-                    // 載入文章列表後開啟新文章
+                    showTab('list');
                     var newArticleId = result.id;
                     setTimeout(function() {
-                        loadArticlesAndOpen(newArticleId);
-                    }, 300);
-                    clearForm();
+                        viewArticle(newArticleId);
+                    }, 500);
                 } else {
                     showMessage("上傳失敗: " + (result.error || "未知錯誤"), "error");
                 }
