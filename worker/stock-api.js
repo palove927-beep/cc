@@ -678,13 +678,22 @@ async function handleCreateArticle(request, env) {
       return jsonResponse({ error: "請提供文章內容" }, 400);
     }
 
-    // 1. 用 AI 標記股票
-    var stockTags = [];
+    // 1. 先用 regex 辨識有 "(代號)" 格式的股票（最可靠）
+    var stockTags = parseStocksFromContent(content);
+    var seenCodes = {};
+    for (var i = 0; i < stockTags.length; i++) {
+      seenCodes[stockTags[i].code] = true;
+    }
+
+    // 2. 再用 AI 辨識沒有代號的股票，合併結果
     if (env.VERCEL_AI_KEY) {
-      stockTags = await tagStocksWithAI(content, env.VERCEL_AI_KEY);
-    } else {
-      // fallback: 用 regex 解析 "股票名(代號)" 格式
-      stockTags = parseStocksFromContent(content);
+      var aiStocks = await tagStocksWithAI(content, env.VERCEL_AI_KEY);
+      for (var i = 0; i < aiStocks.length; i++) {
+        if (!seenCodes[aiStocks[i].code]) {
+          seenCodes[aiStocks[i].code] = true;
+          stockTags.push(aiStocks[i]);
+        }
+      }
     }
 
     // 2. 儲存文章（含圖片）
