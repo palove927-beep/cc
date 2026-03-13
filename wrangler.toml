@@ -14,6 +14,13 @@ binding = "DB"
 database_name = "stock-notes"
 database_id = "25569f6a-7ab9-41b4-a191-90f96e0a5624"
 
+# R2 Storage for images
+# 1. Create R2 bucket: npx wrangler r2 bucket create cc-images
+# 2. The binding below will be available as env.IMAGES
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "cc-images"
+
 # Environment variables (set in Cloudflare Dashboard):
 # - FUGLE_API_KEY: Fugle API key
 # - ADMIN_KEY: Admin password for managing articles

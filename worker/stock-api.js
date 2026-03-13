@@ -83,6 +83,11 @@ export default {
       return corsResponse(await handleStockArticles(url, env));
     }
 
+    // 股票財測查詢
+    if (url.pathname === "/api/forecasts") {
+      return corsResponse(await handleForecasts(url, env));
+    }
+
     // 系統狀態檢查
     if (url.pathname === "/api/status") {
       return corsResponse(jsonResponse({
@@ -90,7 +95,8 @@ export default {
         env: {
           VERCEL_AI_KEY: env.VERCEL_AI_KEY ? "已設定" : "未設定",
           FUGLE_API_KEY: env.FUGLE_API_KEY ? "已設定" : "未設定",
-          DB: env.DB ? "已連接" : "未連接"
+          DB: env.DB ? "已連接" : "未連接",
+          IMAGES: env.IMAGES ? "已連接" : "未設定"
         }
       }));
     }
@@ -104,6 +110,17 @@ export default {
       } catch (e) {
         return corsResponse(jsonResponse({ error: e.message }, 500));
       }
+    }
+
+    // 圖片上傳 API
+    if (url.pathname === "/api/images" && request.method === "POST") {
+      return corsResponse(await handleImageUpload(request, env));
+    }
+
+    // 圖片讀取 API
+    if (url.pathname.startsWith("/api/images/")) {
+      var imageName = url.pathname.replace("/api/images/", "");
+      return await handleImageGet(imageName, env);
     }
 
     return corsResponse(new Response(
@@ -629,7 +646,7 @@ async function handleGetArticle(id, env) {
 
     // 取得該文章的股票標記
     var stocks = await env.DB.prepare(
-      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY stock_code"
+      "SELECT stock_code, stock_name, paragraph FROM article_stocks WHERE article_id = ? ORDER BY position, id"
     ).bind(id).all();
 
     return jsonResponse({
@@ -655,6 +672,7 @@ async function handleCreateArticle(request, env) {
     var title = body.title;
     var content = body.content;
     var publishDate = body.publish_date || new Date().toISOString().split("T")[0];
+    var images = body.images || [];
 
     if (!content) {
       return jsonResponse({ error: "請提供文章內容" }, 400);
@@ -669,25 +687,54 @@ async function handleCreateArticle(request, env) {
       stockTags = parseStocksFromContent(content);
     }
 
-    // 2. 儲存文章
+    // 2. 儲存文章（含圖片）
+    var imagesJson = images.length > 0 ? JSON.stringify(images) : null;
     var result = await env.DB.prepare(`
-      INSERT INTO articles (title, content, publish_date)
-      VALUES (?, ?, ?)
+      INSERT INTO articles (title, content, publish_date, images)
+      VALUES (?, ?, ?, ?)
     `).bind(
       title || "週報 " + publishDate,
       content,
-      publishDate
+      publishDate,
+      imagesJson
     ).run();
 
     var articleId = result.meta.last_row_id;
 
-    // 3. 儲存股票標記
+    // 3. 儲存股票標記（依文章順序）
+    // 計算每個股票在文章中首次出現的位置
     for (var i = 0; i < stockTags.length; i++) {
       var tag = stockTags[i];
+      // 找出股票名稱或代號在文章中的位置
+      var pos = content.indexOf(tag.name);
+      if (pos === -1) pos = content.indexOf(tag.code);
+      if (pos === -1) pos = 999999; // 找不到就放最後
+      tag.position = pos;
+    }
+    // 依位置排序
+    stockTags.sort(function(a, b) { return a.position - b.position; });
+
+    for (var i = 0; i < stockTags.length; i++) {
+      var tag = stockTags[i];
+
+      // 儲存股票標記
       await env.DB.prepare(`
-        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph)
-        VALUES (?, ?, ?, ?)
-      `).bind(articleId, tag.code, tag.name, tag.paragraph || "").run();
+        INSERT OR IGNORE INTO article_stocks (article_id, stock_code, stock_name, paragraph, position)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
+
+      // 解析並儲存 EPS 財測（獨立表）
+      var eps = parseEPS(tag.paragraph || "");
+      if (eps.eps_2025 || eps.eps_2026 || eps.eps_2027) {
+        tag.eps_2025 = eps.eps_2025;
+        tag.eps_2026 = eps.eps_2026;
+        tag.eps_2027 = eps.eps_2027;
+
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+      }
     }
 
     return jsonResponse({
@@ -754,6 +801,50 @@ async function handleStockArticles(url, env) {
 }
 
 /**
+ * 查詢股票財測
+ * GET /api/forecasts?code=2327 - 查詢特定股票
+ * GET /api/forecasts - 查詢所有最新財測
+ */
+async function handleForecasts(url, env) {
+  if (!env || !env.DB) {
+    return jsonResponse({ error: "D1 尚未設定" }, 500);
+  }
+
+  var code = url.searchParams.get("code");
+
+  try {
+    var result;
+    if (code) {
+      // 查詢特定股票的財測歷史
+      result = await env.DB.prepare(`
+        SELECT stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id
+        FROM stock_forecasts
+        WHERE stock_code = ?
+        ORDER BY forecast_date DESC
+      `).bind(code).all();
+    } else {
+      // 查詢所有股票的最新財測
+      result = await env.DB.prepare(`
+        SELECT sf.stock_code, sf.stock_name, sf.forecast_date, sf.eps_2025, sf.eps_2026, sf.eps_2027
+        FROM stock_forecasts sf
+        INNER JOIN (
+          SELECT stock_code, MAX(forecast_date) as max_date
+          FROM stock_forecasts
+          GROUP BY stock_code
+        ) latest ON sf.stock_code = latest.stock_code AND sf.forecast_date = latest.max_date
+        ORDER BY sf.stock_code
+      `).all();
+    }
+
+    return jsonResponse({
+      forecasts: result.results
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
  * 用 AI 標記文章中的股票
  * 辨識所有 "股票名(代號)" 格式的股票
  */
@@ -784,12 +875,14 @@ async function tagStocksWithAI(content, apiKey) {
 日月光=3711, 矽品=2325, 欣興=3037, 景碩=3189, 南電=8046
 
 ## 輸出格式
-回傳 JSON 陣列，每個元素只包含：
+回傳 JSON 陣列，每個元素包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
+- paragraph: 文章中提及該股票的相關段落（必須是原文，不可改寫或省略）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
+- paragraph 欄位必須完整複製原文，包含標點符號
 - 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
 - 如果沒找到任何股票，回傳空陣列 []
 
@@ -815,36 +908,17 @@ ${content}`
 
     var stocks = JSON.parse(text);
 
-    // 用程式提取段落，而不是讓 AI 複製（更可靠）
+    // 去重複
     var seen = {};
     var result = [];
     for (var i = 0; i < stocks.length; i++) {
       var stock = stocks[i];
       if (!seen[stock.code]) {
         seen[stock.code] = true;
-        // 在文章中找到該股票的位置（多種搜尋模式）
-        var pos = -1;
-        // 1. 完整格式：公司名(代號)
-        if (pos === -1) pos = content.indexOf(stock.name + "(" + stock.code + ")");
-        if (pos === -1) pos = content.indexOf(stock.name + "（" + stock.code + "）");
-        // 2. 只搜尋 (代號) 格式（文章中可能用不同名稱）
-        if (pos === -1) pos = content.indexOf("(" + stock.code + ")");
-        if (pos === -1) pos = content.indexOf("（" + stock.code + "）");
-        // 3. 搜尋代號本身
-        if (pos === -1) pos = content.indexOf(stock.code);
-        // 4. 搜尋公司名稱
-        if (pos === -1) pos = content.indexOf(stock.name);
-        // 5. 名稱去掉 -KY 等後綴再搜尋
-        if (pos === -1 && stock.name.indexOf("-") !== -1) {
-          var baseName = stock.name.split("-")[0];
-          pos = content.indexOf(baseName);
-        }
-
-        var paragraph = pos !== -1 ? extractParagraph(content, pos) : "";
         result.push({
           code: stock.code,
           name: stock.name,
-          paragraph: paragraph
+          paragraph: stock.paragraph || ""
         });
       }
     }
@@ -940,39 +1014,62 @@ function extractParagraph(content, position) {
   var beforePos = content.substring(0, position);
   var afterPos = content.substring(position);
 
-  // 段落分隔模式：只用數字.（如 1. 2. 3.）
-  var paraStartPattern = /\n(\d+)\.\s/g;
-
   // 往前找段落開頭
   var start = 0;
+  var startedWithNumber = false;
 
-  // 找最近的空行
-  var emptyLineIdx = beforePos.lastIndexOf("\n\n");
-  if (emptyLineIdx !== -1) {
-    start = emptyLineIdx + 2;
-  }
-
-  // 找最近的「數字. 」
+  // 找最近的「數字. 」（如 1. 2. 3.）
+  // 支援：換行後、空格後、或文章開頭
+  var paraStartPattern = /(?:^|\n|\s)(\d+)\.\s/g;
   var match;
   var lastParaStart = -1;
-  paraStartPattern.lastIndex = 0;
   while ((match = paraStartPattern.exec(beforePos)) !== null) {
-    lastParaStart = match.index + 1; // 跳過換行
+    // 計算實際數字開始的位置
+    var numStart = match.index;
+    if (beforePos[numStart] === '\n' || beforePos[numStart] === ' ' || beforePos[numStart] === '\t') {
+      numStart += 1;
+    }
+    lastParaStart = numStart;
   }
-  if (lastParaStart > start) {
+  // 也檢查文章開頭是否為數字.
+  if (beforePos.match(/^\d+\.\s/)) {
+    lastParaStart = 0;
+  }
+  if (lastParaStart !== -1) {
     start = lastParaStart;
+    startedWithNumber = true;
   }
 
-  // 找最近的標題行作為段落開頭
-  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤', '備註：'];
-  for (var i = 0; i < titlePatterns.length; i++) {
-    var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
-    if (titleIdx === -1) titleIdx = beforePos.lastIndexOf(titlePatterns[i]);
-    if (titleIdx !== -1) {
-      var titleStart = titleIdx;
-      if (beforePos[titleIdx] === '\n') titleStart += 1;
-      if (titleStart > start) {
-        start = titleStart;
+  // 如果沒找到數字開頭，找標題行或空行
+  if (!startedWithNumber) {
+    // 找最近的空行
+    var emptyLineIdx = beforePos.lastIndexOf("\n\n");
+    if (emptyLineIdx !== -1) {
+      start = emptyLineIdx + 2;
+    }
+
+    // 找最近的標題行作為段落開頭（必須在行首）
+    var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
+    for (var i = 0; i < titlePatterns.length; i++) {
+      var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
+      if (titleIdx === -1 && beforePos.indexOf(titlePatterns[i]) === 0) {
+        titleIdx = 0;
+      }
+      if (titleIdx !== -1) {
+        var titleStart = titleIdx;
+        if (beforePos[titleIdx] === '\n') titleStart += 1;
+        if (titleStart > start) {
+          start = titleStart;
+        }
+      }
+    }
+    // 「備註：」只有在行首才當作分隔
+    var remarkIdx = beforePos.lastIndexOf('\n備註：');
+    if (remarkIdx === -1 && beforePos.indexOf('備註：') === 0) remarkIdx = 0;
+    if (remarkIdx !== -1) {
+      var remarkStart = remarkIdx === 0 ? 0 : remarkIdx + 1;
+      if (remarkStart > start) {
+        start = remarkStart;
       }
     }
   }
@@ -980,32 +1077,84 @@ function extractParagraph(content, position) {
   // 往後找段落結尾
   var end = content.length;
 
-  // 找最近的空行
-  var emptyLineEnd = afterPos.indexOf("\n\n");
-  if (emptyLineEnd !== -1) {
-    end = position + emptyLineEnd;
-  }
-
-  // 找最近的「數字. 」
-  var endMatch = afterPos.match(/\n\d+\.\s/);
-  if (endMatch && position + endMatch.index < end) {
+  // 找最近的「數字. 」（如下一個 3. 4.）
+  // 支援換行後或空格後
+  var endMatch = afterPos.match(/(?:\n|\s)(\d+)\.\s/);
+  if (endMatch) {
     end = position + endMatch.index;
   }
 
-  // 找最近的標題行（排除 a. b. c. 開頭的子項目）
-  var titleMatch = afterPos.match(/\n(?![a-z]\.\s)(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
+  // 找最近的標題行
+  var titleMatch = afterPos.match(/\n(定錨研究範圍|移除追蹤|新增追蹤|備註：)/);
   if (titleMatch && position + titleMatch.index < end) {
     end = position + titleMatch.index;
+  }
+
+  // 只有在非數字開頭的段落才用空行分隔
+  if (!startedWithNumber) {
+    var emptyLineEnd = afterPos.indexOf("\n\n");
+    if (emptyLineEnd !== -1 && position + emptyLineEnd < end) {
+      end = position + emptyLineEnd;
+    }
   }
 
   var para = content.substring(start, end).trim();
 
   // 限制長度
-  if (para.length > 3000) {
-    para = para.substring(0, 3000) + "...";
+  if (para.length > 5000) {
+    para = para.substring(0, 5000) + "...";
   }
 
   return para;
+}
+
+/**
+ * 從段落中解析 EPS 財測
+ * 支援格式：
+ * - 2026/2027年財測EPS上修至10.60/17.36元
+ * - 2025/2026/2027年EPS為5.00/6.50/8.00元
+ * - 2026年EPS 10.5元
+ */
+function parseEPS(text) {
+  var result = { eps_2025: null, eps_2026: null, eps_2027: null };
+  if (!text) return result;
+
+  // 模式1: 2025/2026/2027年...EPS...至/為X.XX/Y.YY/Z.ZZ元
+  var match3 = text.match(/2025\s*[\/／]\s*2026\s*[\/／]\s*2027\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match3) {
+    result.eps_2025 = parseFloat(match3[1]);
+    result.eps_2026 = parseFloat(match3[2]);
+    result.eps_2027 = parseFloat(match3[3]);
+    return result;
+  }
+
+  // 模式2: 2026/2027年...EPS...至/為X.XX/Y.YY元
+  var match2 = text.match(/2026\s*[\/／]\s*2027\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match2) {
+    result.eps_2026 = parseFloat(match2[1]);
+    result.eps_2027 = parseFloat(match2[2]);
+    return result;
+  }
+
+  // 模式3: 2025/2026年...EPS...至/為X.XX/Y.YY元
+  var match25_26 = text.match(/2025\s*[\/／]\s*2026\s*年[^元]*?(\d+(?:\.\d+)?)\s*[\/／]\s*(\d+(?:\.\d+)?)\s*元/);
+  if (match25_26) {
+    result.eps_2025 = parseFloat(match25_26[1]);
+    result.eps_2026 = parseFloat(match25_26[2]);
+    return result;
+  }
+
+  // 模式4: 單一年度 2026年EPS X.XX元 或 2026年...EPS...X.XX元
+  var single2025 = text.match(/2025\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2025) result.eps_2025 = parseFloat(single2025[1]);
+
+  var single2026 = text.match(/2026\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2026) result.eps_2026 = parseFloat(single2026[1]);
+
+  var single2027 = text.match(/2027\s*年[^元]*?EPS[^元]*?(\d+(?:\.\d+)?)\s*元/);
+  if (single2027) result.eps_2027 = parseFloat(single2027[1]);
+
+  return result;
 }
 
 function jsonResponse(obj, status) {
@@ -1024,4 +1173,79 @@ function corsResponse(response) {
     status: response.status,
     headers: headers
   });
+}
+
+/**
+ * 處理圖片上傳
+ * POST /api/images
+ * Content-Type: multipart/form-data
+ * Body: file (圖片檔案)
+ */
+async function handleImageUpload(request, env) {
+  if (!env || !env.IMAGES) {
+    return jsonResponse({ error: "R2 尚未設定" }, 500);
+  }
+
+  try {
+    var formData = await request.formData();
+    var file = formData.get("file");
+
+    if (!file) {
+      return jsonResponse({ error: "請提供 file 欄位" }, 400);
+    }
+
+    // 驗證檔案類型
+    var allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (allowedTypes.indexOf(file.type) === -1) {
+      return jsonResponse({ error: "只允許 JPEG、PNG、GIF、WebP 格式" }, 400);
+    }
+
+    // 生成唯一檔名
+    var ext = file.name.split(".").pop() || "jpg";
+    var timestamp = Date.now();
+    var random = Math.random().toString(36).substring(2, 8);
+    var fileName = timestamp + "-" + random + "." + ext;
+
+    // 上傳到 R2
+    await env.IMAGES.put(fileName, file.stream(), {
+      httpMetadata: {
+        contentType: file.type
+      }
+    });
+
+    return jsonResponse({
+      success: true,
+      fileName: fileName,
+      url: "/api/images/" + fileName
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+/**
+ * 處理圖片讀取
+ * GET /api/images/:fileName
+ */
+async function handleImageGet(fileName, env) {
+  if (!env || !env.IMAGES) {
+    return new Response("R2 not configured", { status: 500 });
+  }
+
+  try {
+    var object = await env.IMAGES.get(fileName);
+
+    if (!object) {
+      return new Response("Image not found", { status: 404 });
+    }
+
+    var headers = new Headers();
+    headers.set("Content-Type", object.httpMetadata?.contentType || "image/jpeg");
+    headers.set("Cache-Control", "public, max-age=31536000");
+    headers.set("Access-Control-Allow-Origin", "*");
+
+    return new Response(object.body, { headers: headers });
+  } catch (e) {
+    return new Response("Error: " + e.message, { status: 500 });
+  }
 }
