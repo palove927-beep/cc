@@ -415,7 +415,7 @@
 
             var btn = document.getElementById("upload-btn");
             btn.disabled = true;
-            btn.textContent = "處理中...";
+            showMessage("處理中...", "info");
 
             fetch(WORKER_URL + "/api/articles", {
                 method: "POST",
