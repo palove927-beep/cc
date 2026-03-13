@@ -678,13 +678,22 @@ async function handleCreateArticle(request, env) {
       return jsonResponse({ error: "請提供文章內容" }, 400);
     }
 
-    // 1. 用 AI 標記股票
-    var stockTags = [];
+    // 1. 先用 regex 辨識有 "(代號)" 格式的股票（最可靠）
+    var stockTags = parseStocksFromContent(content);
+    var seenCodes = {};
+    for (var i = 0; i < stockTags.length; i++) {
+      seenCodes[stockTags[i].code] = true;
+    }
+
+    // 2. 再用 AI 辨識沒有代號的股票，合併結果
     if (env.VERCEL_AI_KEY) {
-      stockTags = await tagStocksWithAI(content, env.VERCEL_AI_KEY);
-    } else {
-      // fallback: 用 regex 解析 "股票名(代號)" 格式
-      stockTags = parseStocksFromContent(content);
+      var aiStocks = await tagStocksWithAI(content, env.VERCEL_AI_KEY);
+      for (var i = 0; i < aiStocks.length; i++) {
+        if (!seenCodes[aiStocks[i].code]) {
+          seenCodes[aiStocks[i].code] = true;
+          stockTags.push(aiStocks[i]);
+        }
+      }
     }
 
     // 2. 儲存文章（含圖片）
@@ -723,17 +732,21 @@ async function handleCreateArticle(request, env) {
         VALUES (?, ?, ?, ?, ?)
       `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
 
-      // 解析並儲存 EPS 財測（獨立表）
+      // 解析並儲存 EPS 財測（獨立表，表不存在時跳過）
       var eps = parseEPS(tag.paragraph || "");
       if (eps.eps_2025 || eps.eps_2026 || eps.eps_2027) {
         tag.eps_2025 = eps.eps_2025;
         tag.eps_2026 = eps.eps_2026;
         tag.eps_2027 = eps.eps_2027;
 
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+        try {
+          await env.DB.prepare(`
+            INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+        } catch (e) {
+          // stock_forecasts 表不存在時跳過
+        }
       }
     }
 
@@ -846,7 +859,7 @@ async function handleForecasts(url, env) {
 
 /**
  * 用 AI 標記文章中的股票
- * 辨識所有 "股票名(代號)" 格式的股票
+ * AI 只負責辨識股票代號和名稱，段落由程式碼擷取
  */
 async function tagStocksWithAI(content, apiKey) {
   try {
@@ -878,18 +891,16 @@ async function tagStocksWithAI(content, apiKey) {
 回傳 JSON 陣列，每個元素包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
-- paragraph: 文章中提及該股票的相關段落（必須是原文，不可改寫或省略）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- paragraph 欄位必須完整複製原文，包含標點符號
 - 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
 - 如果沒找到任何股票，回傳空陣列 []
 
 ## 文章內容
 ${content}`
         }],
-        max_tokens: 8000
+        max_tokens: 4000
       })
     });
 
@@ -908,19 +919,28 @@ ${content}`
 
     var stocks = JSON.parse(text);
 
-    // 去重複
-    var seen = {};
+    // 用 extractParagraph 根據股票名稱位置擷取段落
     var result = [];
+    var seen = {};
     for (var i = 0; i < stocks.length; i++) {
       var stock = stocks[i];
-      if (!seen[stock.code]) {
-        seen[stock.code] = true;
-        result.push({
-          code: stock.code,
-          name: stock.name,
-          paragraph: stock.paragraph || ""
-        });
+      if (!stock.code || seen[stock.code]) continue;
+      seen[stock.code] = true;
+
+      // 找股票名稱或代號在文章中的位置
+      var pos = content.indexOf(stock.name);
+      if (pos === -1) pos = content.indexOf(stock.code);
+
+      var paragraph = "";
+      if (pos !== -1) {
+        paragraph = extractParagraph(content, pos);
       }
+
+      result.push({
+        code: stock.code,
+        name: stock.name,
+        paragraph: paragraph
+      });
     }
 
     return result;
