@@ -875,12 +875,14 @@ async function tagStocksWithAI(content, apiKey) {
 日月光=3711, 矽品=2325, 欣興=3037, 景碩=3189, 南電=8046
 
 ## 輸出格式
-回傳 JSON 陣列，每個元素只包含：
+回傳 JSON 陣列，每個元素包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
+- paragraph: 文章中提及該股票的相關段落（必須是原文，不可改寫或省略）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
+- paragraph 欄位必須完整複製原文，包含標點符號
 - 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
 - 如果沒找到任何股票，回傳空陣列 []
 
@@ -906,36 +908,17 @@ ${content}`
 
     var stocks = JSON.parse(text);
 
-    // 用程式提取段落，而不是讓 AI 複製（更可靠）
+    // 去重複
     var seen = {};
     var result = [];
     for (var i = 0; i < stocks.length; i++) {
       var stock = stocks[i];
       if (!seen[stock.code]) {
         seen[stock.code] = true;
-        // 在文章中找到該股票的位置（多種搜尋模式）
-        var pos = -1;
-        // 1. 完整格式：公司名(代號)
-        if (pos === -1) pos = content.indexOf(stock.name + "(" + stock.code + ")");
-        if (pos === -1) pos = content.indexOf(stock.name + "（" + stock.code + "）");
-        // 2. 只搜尋 (代號) 格式（文章中可能用不同名稱）
-        if (pos === -1) pos = content.indexOf("(" + stock.code + ")");
-        if (pos === -1) pos = content.indexOf("（" + stock.code + "）");
-        // 3. 搜尋代號本身
-        if (pos === -1) pos = content.indexOf(stock.code);
-        // 4. 搜尋公司名稱
-        if (pos === -1) pos = content.indexOf(stock.name);
-        // 5. 名稱去掉 -KY 等後綴再搜尋
-        if (pos === -1 && stock.name.indexOf("-") !== -1) {
-          var baseName = stock.name.split("-")[0];
-          pos = content.indexOf(baseName);
-        }
-
-        var paragraph = pos !== -1 ? extractParagraph(content, pos) : "";
         result.push({
           code: stock.code,
           name: stock.name,
-          paragraph: paragraph
+          paragraph: stock.paragraph || ""
         });
       }
     }
