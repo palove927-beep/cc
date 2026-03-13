@@ -846,7 +846,7 @@ async function handleForecasts(url, env) {
 
 /**
  * 用 AI 標記文章中的股票
- * 辨識所有 "股票名(代號)" 格式的股票
+ * AI 只負責辨識股票代號和名稱，段落由程式碼擷取
  */
 async function tagStocksWithAI(content, apiKey) {
   try {
@@ -878,18 +878,16 @@ async function tagStocksWithAI(content, apiKey) {
 回傳 JSON 陣列，每個元素包含：
 - code: 股票代號（4-6位數字）
 - name: 股票名稱
-- paragraph: 文章中提及該股票的相關段落（必須是原文，不可改寫或省略）
 
 注意：
 - 只回傳 JSON 陣列，不要其他文字
-- paragraph 欄位必須完整複製原文，包含標點符號
 - 包含外國公司（AWS、NVIDIA、Google、Samsung、Intel、AMD、Qualcomm、Apple、Microsoft 等），使用其美股代號
 - 如果沒找到任何股票，回傳空陣列 []
 
 ## 文章內容
 ${content}`
         }],
-        max_tokens: 8000
+        max_tokens: 4000
       })
     });
 
@@ -908,19 +906,28 @@ ${content}`
 
     var stocks = JSON.parse(text);
 
-    // 去重複
-    var seen = {};
+    // 用 extractParagraph 根據股票名稱位置擷取段落
     var result = [];
+    var seen = {};
     for (var i = 0; i < stocks.length; i++) {
       var stock = stocks[i];
-      if (!seen[stock.code]) {
-        seen[stock.code] = true;
-        result.push({
-          code: stock.code,
-          name: stock.name,
-          paragraph: stock.paragraph || ""
-        });
+      if (!stock.code || seen[stock.code]) continue;
+      seen[stock.code] = true;
+
+      // 找股票名稱或代號在文章中的位置
+      var pos = content.indexOf(stock.name);
+      if (pos === -1) pos = content.indexOf(stock.code);
+
+      var paragraph = "";
+      if (pos !== -1) {
+        paragraph = extractParagraph(content, pos);
       }
+
+      result.push({
+        code: stock.code,
+        name: stock.name,
+        paragraph: paragraph
+      });
     }
 
     return result;
