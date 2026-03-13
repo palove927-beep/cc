@@ -1034,62 +1034,46 @@ function extractParagraph(content, position) {
   var beforePos = content.substring(0, position);
   var afterPos = content.substring(position);
 
-  // 往前找段落開頭
-  var start = 0;
+  // 先找標題（如「定錨研究範圍」），作為段落區域的起點
+  var sectionStart = 0;
+  var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
+  for (var i = 0; i < titlePatterns.length; i++) {
+    // 支援換行或空格作為分隔
+    var titleIdx = beforePos.lastIndexOf(titlePatterns[i]);
+    if (titleIdx !== -1 && titleIdx > sectionStart) {
+      sectionStart = titleIdx;
+    }
+  }
+
+  // 在 sectionStart 之後的範圍內找「數字. 」
+  var searchRange = beforePos.substring(sectionStart);
+  var start = sectionStart;
   var startedWithNumber = false;
 
-  // 找最近的「數字. 」（如 1. 2. 3.）
-  // 支援：換行後、空格後、或文章開頭
   var paraStartPattern = /(?:^|\n|\s)(\d+)\.\s/g;
   var match;
   var lastParaStart = -1;
-  while ((match = paraStartPattern.exec(beforePos)) !== null) {
-    // 計算實際數字開始的位置
+  while ((match = paraStartPattern.exec(searchRange)) !== null) {
     var numStart = match.index;
-    if (beforePos[numStart] === '\n' || beforePos[numStart] === ' ' || beforePos[numStart] === '\t') {
+    if (searchRange[numStart] === '\n' || searchRange[numStart] === ' ' || searchRange[numStart] === '\t') {
       numStart += 1;
     }
-    lastParaStart = numStart;
+    lastParaStart = sectionStart + numStart;
   }
-  // 也檢查文章開頭是否為數字.
-  if (beforePos.match(/^\d+\.\s/)) {
-    lastParaStart = 0;
-  }
+
   if (lastParaStart !== -1) {
     start = lastParaStart;
     startedWithNumber = true;
   }
 
-  // 如果沒找到數字開頭，找標題行或空行
+  // 如果沒找到數字開頭，使用 sectionStart 或找空行
   if (!startedWithNumber) {
-    // 找最近的空行
-    var emptyLineIdx = beforePos.lastIndexOf("\n\n");
-    if (emptyLineIdx !== -1) {
-      start = emptyLineIdx + 2;
-    }
-
-    // 找最近的標題行作為段落開頭（必須在行首）
-    var titlePatterns = ['定錨研究範圍', '移除追蹤', '新增追蹤'];
-    for (var i = 0; i < titlePatterns.length; i++) {
-      var titleIdx = beforePos.lastIndexOf('\n' + titlePatterns[i]);
-      if (titleIdx === -1 && beforePos.indexOf(titlePatterns[i]) === 0) {
-        titleIdx = 0;
-      }
-      if (titleIdx !== -1) {
-        var titleStart = titleIdx;
-        if (beforePos[titleIdx] === '\n') titleStart += 1;
-        if (titleStart > start) {
-          start = titleStart;
-        }
-      }
-    }
-    // 「備註：」只有在行首才當作分隔
-    var remarkIdx = beforePos.lastIndexOf('\n備註：');
-    if (remarkIdx === -1 && beforePos.indexOf('備註：') === 0) remarkIdx = 0;
-    if (remarkIdx !== -1) {
-      var remarkStart = remarkIdx === 0 ? 0 : remarkIdx + 1;
-      if (remarkStart > start) {
-        start = remarkStart;
+    if (sectionStart > 0) {
+      start = sectionStart;
+    } else {
+      var emptyLineIdx = beforePos.lastIndexOf("\n\n");
+      if (emptyLineIdx !== -1) {
+        start = emptyLineIdx + 2;
       }
     }
   }
