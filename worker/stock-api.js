@@ -732,17 +732,21 @@ async function handleCreateArticle(request, env) {
         VALUES (?, ?, ?, ?, ?)
       `).bind(articleId, tag.code, tag.name, tag.paragraph || "", i).run();
 
-      // 解析並儲存 EPS 財測（獨立表）
+      // 解析並儲存 EPS 財測（獨立表，表不存在時跳過）
       var eps = parseEPS(tag.paragraph || "");
       if (eps.eps_2025 || eps.eps_2026 || eps.eps_2027) {
         tag.eps_2025 = eps.eps_2025;
         tag.eps_2026 = eps.eps_2026;
         tag.eps_2027 = eps.eps_2027;
 
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+        try {
+          await env.DB.prepare(`
+            INSERT OR REPLACE INTO stock_forecasts (stock_code, stock_name, forecast_date, eps_2025, eps_2026, eps_2027, article_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(tag.code, tag.name, publishDate, eps.eps_2025, eps.eps_2026, eps.eps_2027, articleId).run();
+        } catch (e) {
+          // stock_forecasts 表不存在時跳過
+        }
       }
     }
 
