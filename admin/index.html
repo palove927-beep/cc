@@ -391,10 +391,17 @@
         var allArticles = [];
 
         function showTab(tabName) {
+            // 移除所有 active
             document.querySelectorAll(".tab").forEach(function(t) { t.classList.remove("active"); });
             document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });
-            document.querySelector(".tab[onclick*='" + tabName + "']").classList.add("active");
-            document.getElementById("tab-" + tabName).classList.add("active");
+
+            // 選擇對應的 tab 按鈕
+            var tabBtn = document.querySelector(".tab[onclick*='" + tabName + "']");
+            if (tabBtn) tabBtn.classList.add("active");
+
+            // 選擇對應的 tab 內容
+            var tabContent = document.getElementById("tab-" + tabName);
+            if (tabContent) tabContent.classList.add("active");
 
             if (tabName === "list") {
                 loadArticles();
